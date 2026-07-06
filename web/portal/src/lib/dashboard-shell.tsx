@@ -27,12 +27,14 @@ interface ApiVideoSession {
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:3001";
 const ADMIN_EMAIL = process.env.NEXT_PUBLIC_DEMO_ADMIN_EMAIL ?? "admin@nursery.local";
 
-export function resolvePreviewUrl(value?: string | null) {
+export function resolvePreviewUrl(value?: string | null, token?: string | null) {
   if (!value) {
     return null;
   }
   if (value.startsWith("/")) {
-    return `${API_BASE}${value}`;
+    const separator = value.includes("?") ? "&" : "?";
+    const tokenQuery = token ? `${separator}token=${encodeURIComponent(token)}` : "";
+    return `${API_BASE}${value}${tokenQuery}`;
   }
   return value;
 }
@@ -119,7 +121,7 @@ function DeviceRow({
         throw new Error(`视频会话创建失败：${response.status}`);
       }
       const session = (await response.json()) as ApiVideoSession;
-      const streamUrl = resolvePreviewUrl(session.mjpegUrl ?? device.mjpegStreamUrl);
+      const streamUrl = resolvePreviewUrl(session.mjpegUrl ?? device.mjpegStreamUrl, token);
       setPreviewOpen(true);
       setPreviewUrl(streamUrl);
       setVideoMessage(streamUrl ? `正在读取实际摄像头画面：${session.mode}` : `视频会话已创建：${session.mode}`);

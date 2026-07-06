@@ -9,6 +9,7 @@ import {
   NotFoundException,
   Param,
   Post,
+  Query,
   StreamableFile
 } from "@nestjs/common";
 import { appState } from "../app-state.js";
@@ -72,9 +73,14 @@ export class DevicesController {
   }
 
   @Get("devices/:id/mjpeg/latest.jpg")
-  getLatestMjpegFrame(@Param("id") id: string, @Headers("authorization") authorization?: string) {
+  getLatestMjpegFrame(
+    @Param("id") id: string,
+    @Headers("authorization") authorization?: string,
+    @Query("token") token?: string
+  ) {
     try {
-      appState.devices.getForUser(actorFromAuthorizationHeader(authorization), id);
+      const effectiveAuthorization = authorization ?? (token ? `Bearer ${token}` : undefined);
+      appState.devices.getForUser(actorFromAuthorizationHeader(effectiveAuthorization), id);
       const frame = appState.store.latestMjpegFrames.get(id);
       if (!frame) {
         throw new NotFoundException("Latest MJPEG frame not found");

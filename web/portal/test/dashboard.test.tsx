@@ -26,8 +26,8 @@ describe("DashboardShell", () => {
   });
 
   it("resolves relayed MJPEG API paths against the configured API base", () => {
-    expect(resolvePreviewUrl("/api/devices/device-north-01/mjpeg/latest.jpg")).toBe(
-      "http://127.0.0.1:3001/api/devices/device-north-01/mjpeg/latest.jpg"
+    expect(resolvePreviewUrl("/api/devices/device-north-01/mjpeg/latest.jpg", "abc.def")).toBe(
+      "http://127.0.0.1:3001/api/devices/device-north-01/mjpeg/latest.jpg?token=abc.def"
     );
     expect(resolvePreviewUrl("http://172.20.10.10:8080/stream.mjpg")).toBe("http://172.20.10.10:8080/stream.mjpg");
     expect(resolvePreviewUrl(null)).toBeNull();

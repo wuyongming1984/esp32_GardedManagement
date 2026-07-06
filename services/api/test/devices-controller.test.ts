@@ -28,6 +28,33 @@ describe("DevicesController", () => {
     expect(file).toBeInstanceOf(StreamableFile);
   });
 
+  it("accepts a query token for image tags that cannot send authorization headers", () => {
+    const controller = new DevicesController();
+    const adminToken = jwt.sign({ sub: "user-admin", role: "platform_admin" }, "dev-only-change-me");
+    appState.store.latestMjpegFrames.set("device-north-01", {
+      data: Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+      contentType: "image/jpeg",
+      updatedAt: new Date("2026-07-07T00:00:00.000Z")
+    });
+
+    const file = controller.getLatestMjpegFrame("device-north-01", undefined, adminToken);
+
+    expect(file).toBeInstanceOf(StreamableFile);
+  });
+
+  it("applies query token authorization before returning relayed MJPEG frames", () => {
+    const controller = new DevicesController();
+    const customerToken = jwt.sign({ sub: "user-customer-north", role: "customer" }, "dev-only-change-me");
+    appState.store.latestMjpegFrames.set("device-south-01", {
+      data: Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+      contentType: "image/jpeg",
+      updatedAt: new Date("2026-07-07T00:00:00.000Z")
+    });
+
+    expect(() => controller.getLatestMjpegFrame("device-south-01", undefined, customerToken)).toThrow(ForbiddenException);
+  });
+
+
   it("returns not found when no relayed MJPEG frame exists", () => {
     const controller = new DevicesController();
     const adminToken = jwt.sign({ sub: "user-admin", role: "platform_admin" }, "dev-only-change-me");
