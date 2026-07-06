@@ -120,6 +120,29 @@ docker compose up -d --build
 docker compose ps
 ```
 
+如果备用镜像源对 `emqx/emqx` 返回 `403 Forbidden`，先用 Mosquitto 作为 MQTT broker 备用方案。服务名仍然保持为 `emqx`，API 的 `MQTT_URL=mqtt://emqx:1883` 不需要修改。
+
+在 `.env` 追加：
+
+```env
+MOSQUITTO_IMAGE=docker.m.daocloud.io/eclipse-mosquitto:2
+```
+
+启动时使用 Mosquitto override：
+
+```bash
+cd ~/esp32_GardedManagement/deploy
+docker compose -f docker-compose.yml -f docker-compose.mosquitto.yml pull postgres coturn nginx emqx
+docker compose -f docker-compose.yml -f docker-compose.mosquitto.yml up -d --build
+docker compose -f docker-compose.yml -f docker-compose.mosquitto.yml ps
+```
+
+后续查看日志也要带上两个 `-f` 文件：
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.mosquitto.yml logs -f emqx
+```
+
 ## 4. 下载代码
 
 ```bash

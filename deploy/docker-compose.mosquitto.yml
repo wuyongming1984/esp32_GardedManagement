@@ -1,0 +1,13 @@
+services:
+  emqx:
+    image: ${MOSQUITTO_IMAGE:-eclipse-mosquitto:2}
+    command:
+      - mosquitto
+      - -c
+      - /mosquitto/config/mosquitto.conf
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto_data:/mosquitto/data
+
+volumes:
+  mosquitto_data:
