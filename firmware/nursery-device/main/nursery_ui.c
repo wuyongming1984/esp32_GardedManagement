@@ -31,8 +31,11 @@ static lv_obj_t *s_camera_image;
 static lv_obj_t *s_tabview;
 static lv_obj_t *s_irrigation_status_label;
 static lv_obj_t *s_irrigation_duration_ta;
+static lv_obj_t *s_irrigation_overlay;
+static lv_obj_t *s_irrigation_overlay_label;
 static bool s_irrigation_from_pc;
 static bool s_irrigation_activate_pending;
+static uint32_t s_irrigation_overlay_logged_sec = UINT32_MAX;
 
 static uint8_t *s_preview_buffer;
 static lv_image_dsc_t s_preview_dsc;
@@ -90,10 +93,34 @@ static void set_label_text(lv_obj_t *label, const char *text)
     }
 }
 
+static void set_irrigation_overlay(bool visible, uint32_t remaining_sec)
+{
+    if (!s_irrigation_overlay || !s_irrigation_overlay_label) {
+        return;
+    }
+
+    if (!visible) {
+        lv_obj_add_flag(s_irrigation_overlay, LV_OBJ_FLAG_HIDDEN);
+        s_irrigation_overlay_logged_sec = UINT32_MAX;
+        return;
+    }
+
+    char text[64];
+    snprintf(text, sizeof(text), "PC浇灌中\n剩余 %lu 秒", (unsigned long)remaining_sec);
+    set_label_text(s_irrigation_overlay_label, text);
+    lv_obj_remove_flag(s_irrigation_overlay, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_move_foreground(s_irrigation_overlay);
+    if (s_irrigation_overlay_logged_sec != remaining_sec) {
+        ESP_LOGI(TAG, "screen irrigation overlay remaining=%lu", (unsigned long)remaining_sec);
+        s_irrigation_overlay_logged_sec = remaining_sec;
+    }
+}
+
 static void update_irrigation_status_label(void)
 {
     char text[72];
     if (nursery_irrigation_state() == NURSERY_IRRIGATION_ON) {
+        uint32_t remaining_sec = nursery_irrigation_remaining_sec();
         if (s_irrigation_activate_pending && s_tabview) {
             lv_tabview_set_active(s_tabview, 2, LV_ANIM_ON);
             s_irrigation_activate_pending = false;
@@ -101,10 +128,12 @@ static void update_irrigation_status_label(void)
         snprintf(text,
                  sizeof(text),
                  s_irrigation_from_pc ? "PC浇灌运行中，剩余 %lu 秒" : "浇灌运行中，剩余 %lu 秒",
-                 (unsigned long)nursery_irrigation_remaining_sec());
+                 (unsigned long)remaining_sec);
+        set_irrigation_overlay(s_irrigation_from_pc, remaining_sec);
     } else {
         s_irrigation_from_pc = false;
         s_irrigation_activate_pending = false;
+        set_irrigation_overlay(false, 0);
         strlcpy(text, "浇灌已关闭", sizeof(text));
     }
     set_label_text(s_irrigation_status_label, text);
@@ -413,6 +442,27 @@ static void build_irrigation_tab(lv_obj_t *tab)
     lv_timer_create(irrigation_timer_cb, 1000, NULL);
 }
 
+static void build_irrigation_overlay(lv_obj_t *parent)
+{
+    s_irrigation_overlay = lv_obj_create(parent);
+    lv_obj_set_size(s_irrigation_overlay, lv_pct(86), 116);
+    lv_obj_align(s_irrigation_overlay, LV_ALIGN_TOP_MID, 0, 62);
+    lv_obj_set_style_bg_color(s_irrigation_overlay, lv_color_hex(0x2f855a), 0);
+    lv_obj_set_style_bg_opa(s_irrigation_overlay, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_color(s_irrigation_overlay, lv_color_hex(0x0f5132), 0);
+    lv_obj_set_style_border_width(s_irrigation_overlay, 2, 0);
+    lv_obj_set_style_radius(s_irrigation_overlay, 12, 0);
+    lv_obj_set_style_pad_all(s_irrigation_overlay, 14, 0);
+    lv_obj_add_flag(s_irrigation_overlay, LV_OBJ_FLAG_HIDDEN);
+
+    s_irrigation_overlay_label = lv_label_create(s_irrigation_overlay);
+    set_ui_font(s_irrigation_overlay_label);
+    lv_obj_set_style_text_color(s_irrigation_overlay_label, lv_color_hex(0xffffff), 0);
+    lv_obj_set_style_text_align(s_irrigation_overlay_label, LV_TEXT_ALIGN_CENTER, 0);
+    lv_label_set_text(s_irrigation_overlay_label, "PC浇灌中\n剩余 0 秒");
+    lv_obj_center(s_irrigation_overlay_label);
+}
+
 esp_err_t nursery_ui_init(const nursery_config_t *config)
 {
     bsp_display_cfg_t cfg = {
@@ -455,6 +505,7 @@ esp_err_t nursery_ui_init(const nursery_config_t *config)
     lv_obj_set_size(s_keyboard, LV_HOR_RES, LV_VER_RES / 2);
     lv_obj_align(s_keyboard, LV_ALIGN_BOTTOM_MID, 0, 0);
     lv_obj_add_flag(s_keyboard, LV_OBJ_FLAG_HIDDEN);
+    build_irrigation_overlay(lv_screen_active());
     s_touch_indev = bsp_display_get_input_dev();
     ESP_LOGI(TAG, "touch input device=%p", s_touch_indev);
     lv_timer_create(touch_diag_timer_cb, 500, NULL);
