@@ -9,6 +9,10 @@ End-to-end MVP scaffold for `ESP32-P4-WIFI6-Touch-LCD-4.3` nursery monitoring an
 - `firmware/nursery-device`: ESP-IDF firmware skeleton for safe-off GPIO, MQTT command handling, and camera integration boundary.
 - `deploy`: Docker Compose deployment with PostgreSQL, EMQX, coturn, Nginx, API, and portal.
 
+## Server Deployment
+
+See [deploy/README.md](deploy/README.md) for repeatable deployment steps on a new cloud server.
+
 ## Local Commands
 
 ```powershell
