@@ -1,0 +1,25 @@
+idf_component_register(
+  SRCS
+    "app_main.c"
+    "nursery_config.c"
+    "nursery_irrigation.c"
+    "nursery_mqtt.c"
+    "nursery_camera.c"
+    "nursery_wifi.c"
+    "nursery_ui.c"
+    "nursery_ui_font.c"
+  INCLUDE_DIRS "."
+  REQUIRES
+    esp_wifi
+    esp_event
+    esp_netif
+    nvs_flash
+    mqtt
+    driver
+    esp_timer
+    esp_http_server
+    esp_driver_jpeg
+    esp_video
+    esp32_p4_wifi6_touch_lcd_4_3
+    lvgl__lvgl
+)

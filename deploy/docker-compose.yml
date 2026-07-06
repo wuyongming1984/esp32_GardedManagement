@@ -1,0 +1,92 @@
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-nursery}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+      POSTGRES_DB: ${POSTGRES_DB:-nursery}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-nursery}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  emqx:
+    image: emqx/emqx:5
+    restart: unless-stopped
+    environment:
+      EMQX_DASHBOARD__DEFAULT_USERNAME: admin
+      EMQX_DASHBOARD__DEFAULT_PASSWORD: change-me
+    ports:
+      - "1883:1883"
+      - "8083:8083"
+      - "18083:18083"
+    volumes:
+      - emqx_data:/opt/emqx/data
+
+  coturn:
+    image: coturn/coturn:4
+    restart: unless-stopped
+    command:
+      - "--fingerprint"
+      - "--lt-cred-mech"
+      - "--realm=${TURN_REALM:-nursery.local}"
+      - "--static-auth-secret=${TURN_SECRET:-dev-turn-secret}"
+      - "--no-cli"
+      - "--no-tls"
+      - "--no-dtls"
+    ports:
+      - "3478:3478/udp"
+      - "3478:3478/tcp"
+
+  api:
+    build:
+      context: ..
+      dockerfile: services/api/Dockerfile
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://nursery:change-me@postgres:5432/nursery}
+      JWT_SECRET: ${JWT_SECRET:-dev-only-change-me}
+      MQTT_URL: ${MQTT_URL:-mqtt://emqx:1883}
+      WS_PORT: 3002
+    depends_on:
+      postgres:
+        condition: service_healthy
+      emqx:
+        condition: service_started
+    expose:
+      - "3001"
+      - "3002"
+
+  portal:
+    build:
+      context: ..
+      dockerfile: web/portal/Dockerfile
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: /api
+    depends_on:
+      api:
+        condition: service_started
+    expose:
+      - "3000"
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./certs:/etc/nginx/certs:ro
+    depends_on:
+      - api
+      - portal
+
+volumes:
+  postgres_data:
+  emqx_data:
