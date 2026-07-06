@@ -9,6 +9,7 @@
 #include "nursery_ui.h"
 #include "nursery_wifi.h"
 
+static const char *TAG = "nursery_mqtt";
 static esp_mqtt_client_handle_t s_client;
 static nursery_config_t s_config;
 
@@ -97,6 +98,7 @@ static void mqtt_event_handler(void *args, esp_event_base_t base, int32_t event_
 esp_err_t nursery_mqtt_start(const nursery_config_t *config)
 {
     s_config = *config;
+    ESP_LOGI(TAG, "starting MQTT client uri=%s device_id=%s", s_config.mqtt_uri, s_config.device_id);
     esp_mqtt_client_config_t mqtt_cfg = {
         .broker.address.uri = s_config.mqtt_uri,
         .credentials.username = s_config.device_id,

@@ -5,6 +5,7 @@
 #include "nvs.h"
 #include "nvs_flash.h"
 
+#define NURSERY_DEFAULT_MQTT_URI "mqtt://8.153.162.62:1883"
 static void read_nvs_string(nvs_handle_t handle, const char *key, char *target, size_t target_len, const char *fallback)
 {
     size_t len = target_len;
@@ -23,13 +24,13 @@ esp_err_t nursery_config_load(nursery_config_t *config)
     if (err != ESP_OK) {
         strlcpy(config->device_id, "device-north-01", sizeof(config->device_id));
         strlcpy(config->device_secret, "dev-secret-change-me", sizeof(config->device_secret));
-        strlcpy(config->mqtt_uri, "mqtt://8.153.162.62:1883", sizeof(config->mqtt_uri));
+        strlcpy(config->mqtt_uri, NURSERY_DEFAULT_MQTT_URI, sizeof(config->mqtt_uri));
         return ESP_OK;
     }
 
     read_nvs_string(handle, "device_id", config->device_id, sizeof(config->device_id), "device-north-01");
     read_nvs_string(handle, "device_secret", config->device_secret, sizeof(config->device_secret), "dev-secret-change-me");
-    read_nvs_string(handle, "mqtt_uri", config->mqtt_uri, sizeof(config->mqtt_uri), "mqtt://8.153.162.62:1883");
+    strlcpy(config->mqtt_uri, NURSERY_DEFAULT_MQTT_URI, sizeof(config->mqtt_uri));
     read_nvs_string(handle, "wifi_ssid", config->wifi_ssid, sizeof(config->wifi_ssid), "");
     read_nvs_string(handle, "wifi_pass", config->wifi_password, sizeof(config->wifi_password), "");
     nvs_get_i32(handle, "water_gpio", &config->irrigation_gpio);
