@@ -2,6 +2,11 @@ import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import mqtt from "mqtt";
 import { appState } from "../app-state.js";
 
+interface DeviceStatusPayload {
+  irrigationState?: "on" | "off";
+  mjpegUrl?: string;
+}
+
 @Injectable()
 export class MqttBridgeService implements OnModuleInit {
   private readonly logger = new Logger(MqttBridgeService.name);
@@ -31,12 +36,36 @@ export class MqttBridgeService implements OnModuleInit {
         return;
       }
       if (channel === "status") {
+        const status = parseDeviceStatusPayload(payload);
         device.status = "online";
         device.lastSeenAt = new Date();
+        if (status?.irrigationState) {
+          device.irrigationState = status.irrigationState;
+        }
+        if (status?.mjpegUrl && isAllowedMjpegUrl(status.mjpegUrl)) {
+          device.mjpegStreamUrl = status.mjpegUrl;
+        }
       }
       if (channel === "events") {
         this.logger.log(`Device event ${deviceId}: ${payload.toString()}`);
       }
     });
+  }
+}
+
+export function parseDeviceStatusPayload(payload: Buffer): DeviceStatusPayload | undefined {
+  try {
+    return JSON.parse(payload.toString()) as DeviceStatusPayload;
+  } catch {
+    return undefined;
+  }
+}
+
+export function isAllowedMjpegUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" && url.pathname === "/stream.mjpg";
+  } catch {
+    return false;
   }
 }

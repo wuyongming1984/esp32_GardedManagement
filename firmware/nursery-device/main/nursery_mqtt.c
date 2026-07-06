@@ -7,8 +7,8 @@
 #include "mqtt_client.h"
 #include "nursery_irrigation.h"
 #include "nursery_ui.h"
+#include "nursery_wifi.h"
 
-static const char *TAG = "nursery_mqtt";
 static esp_mqtt_client_handle_t s_client;
 static nursery_config_t s_config;
 
@@ -30,13 +30,16 @@ void nursery_mqtt_publish_status(void)
         return;
     }
     char topic[128];
-    char payload[192];
+    char payload[320];
+    const char *ip_text = nursery_wifi_current_ip();
     snprintf(topic, sizeof(topic), "devices/%s/status", s_config.device_id);
     snprintf(
         payload,
         sizeof(payload),
-        "{\"status\":\"online\",\"irrigationState\":\"%s\"}",
-        nursery_irrigation_state() == NURSERY_IRRIGATION_ON ? "on" : "off"
+        "{\"status\":\"online\",\"irrigationState\":\"%s\",\"localIp\":\"%s\",\"mjpegUrl\":\"http://%s:8080/stream.mjpg\"}",
+        nursery_irrigation_state() == NURSERY_IRRIGATION_ON ? "on" : "off",
+        ip_text,
+        ip_text
     );
     esp_mqtt_client_publish(s_client, topic, payload, 0, 1, 1);
 }
