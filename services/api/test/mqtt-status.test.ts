@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { createSeededNurseryDomain } from "../src/domain/seed.js";
-import { isAllowedMjpegUrl, parseDeviceStatusPayload, storeDeviceMjpegFrame } from "../src/mqtt/mqtt.service.js";
+import {
+  buildIrrigationCommandPayload,
+  isAllowedMjpegUrl,
+  parseDeviceStatusPayload,
+  storeDeviceMjpegFrame
+} from "../src/mqtt/mqtt.service.js";
 
 describe("MQTT device status parsing", () => {
   it("accepts device MJPEG stream URLs from status payloads", () => {
@@ -39,5 +44,18 @@ describe("MQTT device status parsing", () => {
       updatedAt: new Date("2026-07-07T00:00:00.000Z")
     });
     expect(domain.store.latestMjpegFrames.get("device-north-01")?.data.equals(frame)).toBe(true);
+  });
+
+  it("builds irrigation command payloads for device MQTT handlers", () => {
+    const payload = buildIrrigationCommandPayload({
+      id: "irrigation-42",
+      durationSec: 30
+    });
+
+    expect(JSON.parse(payload)).toEqual({
+      commandId: "irrigation-42",
+      durationSec: 30,
+      source: "pc"
+    });
   });
 });

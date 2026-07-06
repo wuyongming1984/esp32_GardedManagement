@@ -14,6 +14,7 @@ import {
 } from "@nestjs/common";
 import { appState } from "../app-state.js";
 import { actorFromAuthorizationHeader } from "../auth/auth.controller.js";
+import { publishIrrigationCommand } from "../mqtt/mqtt.service.js";
 
 function mapDomainError(error: unknown): never {
   if (error instanceof Error) {
@@ -101,11 +102,13 @@ export class DevicesController {
     @Headers("authorization") authorization?: string
   ) {
     try {
-      return appState.irrigation.request({
+      const command = appState.irrigation.request({
         actorUserId: actorFromAuthorizationHeader(authorization),
         deviceId: id,
         durationSec: body.durationSec
       });
+      publishIrrigationCommand(command);
+      return command;
     } catch (error) {
       mapDomainError(error);
     }

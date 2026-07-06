@@ -1,12 +1,14 @@
 import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import mqtt from "mqtt";
 import { appState } from "../app-state.js";
-import { NurseryStore } from "../domain/types.js";
+import { IrrigationCommand, NurseryStore } from "../domain/types.js";
 
 interface DeviceStatusPayload {
   irrigationState?: "on" | "off";
   mjpegUrl?: string;
 }
+
+let mqttClient: mqtt.MqttClient | undefined;
 
 @Injectable()
 export class MqttBridgeService implements OnModuleInit {
@@ -23,6 +25,7 @@ export class MqttBridgeService implements OnModuleInit {
       username: process.env.MQTT_USERNAME,
       password: process.env.MQTT_PASSWORD
     });
+    mqttClient = client;
 
     client.on("connect", () => {
       this.logger.log("MQTT connected");
@@ -57,6 +60,22 @@ export class MqttBridgeService implements OnModuleInit {
       }
     });
   }
+}
+
+export function buildIrrigationCommandPayload(command: Pick<IrrigationCommand, "id" | "durationSec">): string {
+  return JSON.stringify({
+    commandId: command.id,
+    durationSec: command.durationSec,
+    source: "pc"
+  });
+}
+
+export function publishIrrigationCommand(command: IrrigationCommand): boolean {
+  if (!mqttClient?.connected) {
+    return false;
+  }
+  mqttClient.publish(command.commandTopic, buildIrrigationCommandPayload(command), { qos: 1 });
+  return true;
 }
 
 export function storeDeviceMjpegFrame(

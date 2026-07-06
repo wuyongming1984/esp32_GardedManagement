@@ -28,8 +28,10 @@ static lv_obj_t *s_wifi_password_ta;
 static lv_obj_t *s_keyboard;
 static lv_obj_t *s_camera_status_label;
 static lv_obj_t *s_camera_image;
+static lv_obj_t *s_tabview;
 static lv_obj_t *s_irrigation_status_label;
 static lv_obj_t *s_irrigation_duration_ta;
+static bool s_irrigation_from_pc;
 
 static uint8_t *s_preview_buffer;
 static lv_image_dsc_t s_preview_dsc;
@@ -85,6 +87,21 @@ static void set_label_text(lv_obj_t *label, const char *text)
     if (label) {
         lv_label_set_text(label, text ? text : "");
     }
+}
+
+static void update_irrigation_status_label(void)
+{
+    char text[72];
+    if (nursery_irrigation_state() == NURSERY_IRRIGATION_ON) {
+        snprintf(text,
+                 sizeof(text),
+                 s_irrigation_from_pc ? "PC浇灌运行中，剩余 %lu 秒" : "浇灌运行中，剩余 %lu 秒",
+                 (unsigned long)nursery_irrigation_remaining_sec());
+    } else {
+        s_irrigation_from_pc = false;
+        strlcpy(text, "浇灌已关闭", sizeof(text));
+    }
+    set_label_text(s_irrigation_status_label, text);
 }
 
 static void log_touch_event(lv_event_t *event)
@@ -286,26 +303,22 @@ static void irrigation_start_cb(lv_event_t *event)
         set_label_text(s_irrigation_status_label, "时长无效，请输入 1-900 秒");
         return;
     }
-    set_label_text(s_irrigation_status_label, "浇灌运行中");
+    s_irrigation_from_pc = false;
+    update_irrigation_status_label();
 }
 
 static void irrigation_stop_cb(lv_event_t *event)
 {
     (void)event;
     nursery_irrigation_safe_off("local screen stop");
-    set_label_text(s_irrigation_status_label, "浇灌已关闭");
+    s_irrigation_from_pc = false;
+    update_irrigation_status_label();
 }
 
 static void irrigation_timer_cb(lv_timer_t *timer)
 {
     (void)timer;
-    char text[64];
-    if (nursery_irrigation_state() == NURSERY_IRRIGATION_ON) {
-        snprintf(text, sizeof(text), "浇灌运行中，剩余 %lu 秒", (unsigned long)nursery_irrigation_remaining_sec());
-    } else {
-        strlcpy(text, "浇灌已关闭", sizeof(text));
-    }
-    set_label_text(s_irrigation_status_label, text);
+    update_irrigation_status_label();
 }
 
 static void build_network_tab(lv_obj_t *tab, const nursery_config_t *config)
@@ -422,12 +435,12 @@ esp_err_t nursery_ui_init(const nursery_config_t *config)
     s_preview_dsc.data = s_preview_buffer;
 
     ESP_RETURN_ON_ERROR(bsp_display_lock(0), TAG, "display lock failed");
-    lv_obj_t *tabview = lv_tabview_create(lv_screen_active());
-    lv_obj_set_size(tabview, lv_pct(100), lv_pct(100));
-    set_ui_font(lv_tabview_get_tab_bar(tabview));
-    lv_obj_t *network_tab = lv_tabview_add_tab(tabview, "网络");
-    lv_obj_t *camera_tab = lv_tabview_add_tab(tabview, "摄像头");
-    lv_obj_t *irrigation_tab = lv_tabview_add_tab(tabview, "浇灌");
+    s_tabview = lv_tabview_create(lv_screen_active());
+    lv_obj_set_size(s_tabview, lv_pct(100), lv_pct(100));
+    set_ui_font(lv_tabview_get_tab_bar(s_tabview));
+    lv_obj_t *network_tab = lv_tabview_add_tab(s_tabview, "网络");
+    lv_obj_t *camera_tab = lv_tabview_add_tab(s_tabview, "摄像头");
+    lv_obj_t *irrigation_tab = lv_tabview_add_tab(s_tabview, "浇灌");
     build_network_tab(network_tab, config);
     build_camera_tab(camera_tab);
     build_irrigation_tab(irrigation_tab);
@@ -489,6 +502,20 @@ void nursery_ui_set_camera_status(const char *text)
         return;
     }
     set_label_text(s_camera_status_label, text);
+    bsp_display_unlock();
+}
+
+void nursery_ui_show_pc_irrigation(uint32_t duration_sec)
+{
+    (void)duration_sec;
+    if (!s_ui_ready || bsp_display_lock(100) != ESP_OK) {
+        return;
+    }
+    s_irrigation_from_pc = true;
+    if (s_tabview) {
+        lv_tabview_set_active(s_tabview, 2, LV_ANIM_ON);
+    }
+    update_irrigation_status_label();
     bsp_display_unlock();
 }
 

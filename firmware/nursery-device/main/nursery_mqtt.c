@@ -133,6 +133,7 @@ static void mqtt_event_handler(void *args, esp_event_base_t base, int32_t event_
         memcpy(payload, event->data, copy_len);
         uint32_t duration_sec = parse_duration_sec(payload);
         if (nursery_irrigation_start_limited(duration_sec) == ESP_OK) {
+            nursery_ui_show_pc_irrigation(duration_sec);
             publish_event("irrigation.running", payload);
         } else {
             nursery_irrigation_safe_off("invalid irrigation command");
