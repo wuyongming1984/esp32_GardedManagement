@@ -101,6 +101,25 @@ docker compose up -d --build
 docker compose ps
 ```
 
+如果配置镜像加速器后仍出现类似 `postgres:16 not found`，说明当前加速器没有缓存这个镜像。可以在 `.env` 里临时指定可用的镜像代理地址。示例：
+
+```env
+POSTGRES_IMAGE=docker.m.daocloud.io/postgres:16
+EMQX_IMAGE=docker.m.daocloud.io/emqx/emqx:5
+COTURN_IMAGE=docker.m.daocloud.io/coturn/coturn:4
+NGINX_IMAGE=docker.m.daocloud.io/nginx:1.27-alpine
+NODE_IMAGE=docker.m.daocloud.io/node:22-bookworm-slim
+```
+
+更新后重新执行：
+
+```bash
+cd ~/esp32_GardedManagement/deploy
+docker compose pull postgres emqx coturn nginx
+docker compose up -d --build
+docker compose ps
+```
+
 ## 4. 下载代码
 
 ```bash

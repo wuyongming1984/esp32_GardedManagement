@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:16
+    image: ${POSTGRES_IMAGE:-postgres:16}
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-nursery}
@@ -15,7 +15,7 @@ services:
       retries: 5
 
   emqx:
-    image: emqx/emqx:5
+    image: ${EMQX_IMAGE:-emqx/emqx:5}
     restart: unless-stopped
     environment:
       EMQX_DASHBOARD__DEFAULT_USERNAME: admin
@@ -28,7 +28,7 @@ services:
       - emqx_data:/opt/emqx/data
 
   coturn:
-    image: coturn/coturn:4
+    image: ${COTURN_IMAGE:-coturn/coturn:4}
     restart: unless-stopped
     command:
       - "--fingerprint"
@@ -46,6 +46,8 @@ services:
     build:
       context: ..
       dockerfile: services/api/Dockerfile
+      args:
+        NODE_IMAGE: ${NODE_IMAGE:-node:22-bookworm-slim}
     restart: unless-stopped
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql://nursery:change-me@postgres:5432/nursery}
@@ -65,6 +67,8 @@ services:
     build:
       context: ..
       dockerfile: web/portal/Dockerfile
+      args:
+        NODE_IMAGE: ${NODE_IMAGE:-node:22-bookworm-slim}
     restart: unless-stopped
     environment:
       NEXT_PUBLIC_API_BASE_URL: /api
@@ -75,7 +79,7 @@ services:
       - "3000"
 
   nginx:
-    image: nginx:1.27-alpine
+    image: ${NGINX_IMAGE:-nginx:1.27-alpine}
     restart: unless-stopped
     ports:
       - "80:80"
