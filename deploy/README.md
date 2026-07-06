@@ -44,9 +44,11 @@ apt update
 apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 ```
 
-如果官方源下载失败，可以先用系统源：
+如果官方源下载失败，或者看到 `NO_PUBKEY`、`The repository ... is not signed`、`docker: command not found`，先清理失败的官方源配置，再用系统源：
 
 ```bash
+rm -f /etc/apt/sources.list.d/docker.list
+rm -f /etc/apt/keyrings/docker.asc
 apt update
 apt install -y docker.io docker-compose-v2
 systemctl enable --now docker
