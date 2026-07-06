@@ -27,6 +27,16 @@ interface ApiVideoSession {
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:3001";
 const ADMIN_EMAIL = process.env.NEXT_PUBLIC_DEMO_ADMIN_EMAIL ?? "admin@nursery.local";
 
+export function resolvePreviewUrl(value?: string | null) {
+  if (!value) {
+    return null;
+  }
+  if (value.startsWith("/")) {
+    return `${API_BASE}${value}`;
+  }
+  return value;
+}
+
 function statusLabel(status: PortalDevice["status"]) {
   if (status === "online") {
     return "在线";
@@ -78,7 +88,7 @@ function DeviceRow({
   onRefresh: () => Promise<void>;
 }) {
   const [previewOpen, setPreviewOpen] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(device.mjpegStreamUrl ?? null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(resolvePreviewUrl(device.mjpegStreamUrl));
   const [videoMessage, setVideoMessage] = useState("尚未打开预览");
   const [durationSec, setDurationSec] = useState(5);
   const [commandMessage, setCommandMessage] = useState("未下发浇灌命令");
@@ -109,7 +119,7 @@ function DeviceRow({
         throw new Error(`视频会话创建失败：${response.status}`);
       }
       const session = (await response.json()) as ApiVideoSession;
-      const streamUrl = session.mjpegUrl ?? device.mjpegStreamUrl ?? null;
+      const streamUrl = resolvePreviewUrl(session.mjpegUrl ?? device.mjpegStreamUrl);
       setPreviewOpen(true);
       setPreviewUrl(streamUrl);
       setVideoMessage(streamUrl ? `正在读取实际摄像头画面：${session.mode}` : `视频会话已创建：${session.mode}`);

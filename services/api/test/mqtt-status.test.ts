@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { isAllowedMjpegUrl, parseDeviceStatusPayload } from "../src/mqtt/mqtt.service.js";
+import { createSeededNurseryDomain } from "../src/domain/seed.js";
+import { isAllowedMjpegUrl, parseDeviceStatusPayload, storeDeviceMjpegFrame } from "../src/mqtt/mqtt.service.js";
 
 describe("MQTT device status parsing", () => {
   it("accepts device MJPEG stream URLs from status payloads", () => {
@@ -23,5 +24,20 @@ describe("MQTT device status parsing", () => {
     expect(isAllowedMjpegUrl("https://example.com/stream.mjpg")).toBe(false);
     expect(isAllowedMjpegUrl("http://example.com/admin")).toBe(false);
     expect(isAllowedMjpegUrl("not-a-url")).toBe(false);
+  });
+
+  it("stores relayed MJPEG frames behind a public API URL", () => {
+    const domain = createSeededNurseryDomain();
+    const frame = Buffer.from([0xff, 0xd8, 0xff, 0xd9]);
+
+    const stored = storeDeviceMjpegFrame(domain.store, "device-north-01", frame, new Date("2026-07-07T00:00:00.000Z"));
+
+    expect(stored).toBe(true);
+    expect(domain.store.devices.get("device-north-01")?.mjpegStreamUrl).toBe("/api/devices/device-north-01/mjpeg/latest.jpg");
+    expect(domain.store.latestMjpegFrames.get("device-north-01")).toMatchObject({
+      contentType: "image/jpeg",
+      updatedAt: new Date("2026-07-07T00:00:00.000Z")
+    });
+    expect(domain.store.latestMjpegFrames.get("device-north-01")?.data.equals(frame)).toBe(true);
   });
 });

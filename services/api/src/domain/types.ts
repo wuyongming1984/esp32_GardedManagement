@@ -65,6 +65,12 @@ export interface VideoSession {
   mjpegUrl?: string;
 }
 
+export interface MjpegFrame {
+  data: Buffer;
+  contentType: "image/jpeg";
+  updatedAt: Date;
+}
+
 export interface AuditLog {
   id: string;
   actorUserId: string;
@@ -81,6 +87,7 @@ export interface NurseryStore {
   assignments: Map<string, DeviceAssignment>;
   irrigationCommands: Map<string, IrrigationCommand>;
   videoSessions: Map<string, VideoSession>;
+  latestMjpegFrames: Map<string, MjpegFrame>;
   auditLogs: AuditLog[];
 }
 

@@ -12,6 +12,7 @@ export function createEmptyStore(): NurseryStore {
     assignments: new Map(),
     irrigationCommands: new Map(),
     videoSessions: new Map(),
+    latestMjpegFrames: new Map(),
     auditLogs: []
   };
 }

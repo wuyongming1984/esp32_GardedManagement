@@ -8,7 +8,8 @@ import {
   Headers,
   NotFoundException,
   Param,
-  Post
+  Post,
+  StreamableFile
 } from "@nestjs/common";
 import { appState } from "../app-state.js";
 import { actorFromAuthorizationHeader } from "../auth/auth.controller.js";
@@ -65,6 +66,23 @@ export class DevicesController {
   closeVideo(@Param("id") id: string, @Headers("authorization") authorization?: string) {
     try {
       return appState.video.close(actorFromAuthorizationHeader(authorization), id);
+    } catch (error) {
+      mapDomainError(error);
+    }
+  }
+
+  @Get("devices/:id/mjpeg/latest.jpg")
+  getLatestMjpegFrame(@Param("id") id: string, @Headers("authorization") authorization?: string) {
+    try {
+      appState.devices.getForUser(actorFromAuthorizationHeader(authorization), id);
+      const frame = appState.store.latestMjpegFrames.get(id);
+      if (!frame) {
+        throw new NotFoundException("Latest MJPEG frame not found");
+      }
+      return new StreamableFile(frame.data, {
+        type: frame.contentType,
+        disposition: `inline; filename="${id}-latest.jpg"`
+      });
     } catch (error) {
       mapDomainError(error);
     }

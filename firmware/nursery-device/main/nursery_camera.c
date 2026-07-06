@@ -335,3 +335,24 @@ void nursery_camera_set_frame_callback(nursery_camera_frame_cb_t callback, void 
     s_frame_callback = callback;
     s_frame_callback_ctx = user_ctx;
 }
+
+esp_err_t nursery_camera_copy_latest_jpeg(uint8_t *target, size_t target_capacity, size_t *out_size, uint32_t *out_seq)
+{
+    if (!target || !out_size || !out_seq) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    esp_err_t result = ESP_OK;
+    xSemaphoreTake(s_jpeg_mutex, portMAX_DELAY);
+    if (s_jpeg_size == 0) {
+        result = ESP_ERR_NOT_FOUND;
+    } else if (s_jpeg_size > target_capacity) {
+        result = ESP_ERR_INVALID_SIZE;
+    } else {
+        memcpy(target, s_jpeg_buffer, s_jpeg_size);
+        *out_size = s_jpeg_size;
+        *out_seq = s_jpeg_seq;
+    }
+    xSemaphoreGive(s_jpeg_mutex);
+    return result;
+}

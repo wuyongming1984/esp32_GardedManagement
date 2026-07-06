@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import mqtt from "mqtt";
 import { appState } from "../app-state.js";
+import { NurseryStore } from "../domain/types.js";
 
 interface DeviceStatusPayload {
   irrigationState?: "on" | "off";
@@ -27,12 +28,17 @@ export class MqttBridgeService implements OnModuleInit {
       this.logger.log("MQTT connected");
       client.subscribe("devices/+/status");
       client.subscribe("devices/+/events");
+      client.subscribe("devices/+/video/mjpeg");
     });
 
     client.on("message", (topic, payload) => {
-      const [, deviceId, channel] = topic.split("/");
+      const [, deviceId, channel, subchannel] = topic.split("/");
       const device = appState.store.devices.get(deviceId);
       if (!device) {
+        return;
+      }
+      if (channel === "video" && subchannel === "mjpeg") {
+        storeDeviceMjpegFrame(appState.store, deviceId, payload);
         return;
       }
       if (channel === "status") {
@@ -51,6 +57,27 @@ export class MqttBridgeService implements OnModuleInit {
       }
     });
   }
+}
+
+export function storeDeviceMjpegFrame(
+  store: NurseryStore,
+  deviceId: string,
+  payload: Buffer,
+  now: Date = new Date()
+): boolean {
+  const device = store.devices.get(deviceId);
+  if (!device || payload.length < 4) {
+    return false;
+  }
+  store.latestMjpegFrames.set(deviceId, {
+    data: Buffer.from(payload),
+    contentType: "image/jpeg",
+    updatedAt: now
+  });
+  device.status = "online";
+  device.lastSeenAt = now;
+  device.mjpegStreamUrl = `/api/devices/${deviceId}/mjpeg/latest.jpg`;
+  return true;
 }
 
 export function parseDeviceStatusPayload(payload: Buffer): DeviceStatusPayload | undefined {
