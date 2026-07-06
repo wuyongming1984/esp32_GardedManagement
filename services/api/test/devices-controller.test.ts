@@ -1,8 +1,8 @@
-import { ForbiddenException, NotFoundException, StreamableFile } from "@nestjs/common";
+import { ForbiddenException, NotFoundException, ServiceUnavailableException, StreamableFile } from "@nestjs/common";
 import jwt from "jsonwebtoken";
 import { describe, expect, it } from "vitest";
 import { appState } from "../src/app-state.js";
-import { DevicesController } from "../src/devices/devices.controller.js";
+import { DevicesController, ensureIrrigationCommandPublished } from "../src/devices/devices.controller.js";
 
 describe("DevicesController", () => {
   it("maps customer access to an unassigned device to a forbidden response", () => {
@@ -12,6 +12,16 @@ describe("DevicesController", () => {
     expect(() =>
       controller.irrigate("device-south-01", { durationSec: 45 }, `Bearer ${customerToken}`)
     ).toThrow(ForbiddenException);
+  });
+
+  it("does not report irrigation success when the MQTT bridge is offline", () => {
+    const command = appState.irrigation.request({
+      actorUserId: "user-admin",
+      deviceId: "device-north-01",
+      durationSec: 12
+    });
+
+    expect(() => ensureIrrigationCommandPublished(command, () => false)).toThrow(ServiceUnavailableException);
   });
 
   it("returns the latest relayed MJPEG frame for assigned devices", () => {

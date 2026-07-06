@@ -10,11 +10,23 @@ import {
   Param,
   Post,
   Query,
+  ServiceUnavailableException,
   StreamableFile
 } from "@nestjs/common";
 import { appState } from "../app-state.js";
 import { actorFromAuthorizationHeader } from "../auth/auth.controller.js";
 import { publishIrrigationCommand } from "../mqtt/mqtt.service.js";
+import { IrrigationCommand } from "../domain/types.js";
+
+export function ensureIrrigationCommandPublished(
+  command: IrrigationCommand,
+  publish: (command: IrrigationCommand) => boolean = publishIrrigationCommand
+): IrrigationCommand {
+  if (!publish(command)) {
+    throw new ServiceUnavailableException("MQTT broker is not connected; irrigation command was not sent to device");
+  }
+  return command;
+}
 
 function mapDomainError(error: unknown): never {
   if (error instanceof Error) {
@@ -107,8 +119,7 @@ export class DevicesController {
         deviceId: id,
         durationSec: body.durationSec
       });
-      publishIrrigationCommand(command);
-      return command;
+      return ensureIrrigationCommandPublished(command);
     } catch (error) {
       mapDomainError(error);
     }
