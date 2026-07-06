@@ -32,6 +32,7 @@ static lv_obj_t *s_tabview;
 static lv_obj_t *s_irrigation_status_label;
 static lv_obj_t *s_irrigation_duration_ta;
 static bool s_irrigation_from_pc;
+static bool s_irrigation_activate_pending;
 
 static uint8_t *s_preview_buffer;
 static lv_image_dsc_t s_preview_dsc;
@@ -93,12 +94,17 @@ static void update_irrigation_status_label(void)
 {
     char text[72];
     if (nursery_irrigation_state() == NURSERY_IRRIGATION_ON) {
+        if (s_irrigation_activate_pending && s_tabview) {
+            lv_tabview_set_active(s_tabview, 2, LV_ANIM_ON);
+            s_irrigation_activate_pending = false;
+        }
         snprintf(text,
                  sizeof(text),
                  s_irrigation_from_pc ? "PC浇灌运行中，剩余 %lu 秒" : "浇灌运行中，剩余 %lu 秒",
                  (unsigned long)nursery_irrigation_remaining_sec());
     } else {
         s_irrigation_from_pc = false;
+        s_irrigation_activate_pending = false;
         strlcpy(text, "浇灌已关闭", sizeof(text));
     }
     set_label_text(s_irrigation_status_label, text);
@@ -507,13 +513,17 @@ void nursery_ui_set_camera_status(const char *text)
 
 void nursery_ui_show_pc_irrigation(uint32_t duration_sec)
 {
-    (void)duration_sec;
+    ESP_LOGI(TAG, "show pc irrigation countdown duration=%lu remaining=%lu",
+             (unsigned long)duration_sec,
+             (unsigned long)nursery_irrigation_remaining_sec());
+    s_irrigation_from_pc = true;
+    s_irrigation_activate_pending = true;
     if (!s_ui_ready || bsp_display_lock(100) != ESP_OK) {
         return;
     }
-    s_irrigation_from_pc = true;
     if (s_tabview) {
         lv_tabview_set_active(s_tabview, 2, LV_ANIM_ON);
+        s_irrigation_activate_pending = false;
     }
     update_irrigation_status_label();
     bsp_display_unlock();

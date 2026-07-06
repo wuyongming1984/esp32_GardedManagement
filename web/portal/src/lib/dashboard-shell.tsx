@@ -94,8 +94,30 @@ function DeviceRow({
   const [videoMessage, setVideoMessage] = useState("尚未打开预览");
   const [durationSec, setDurationSec] = useState(5);
   const [commandMessage, setCommandMessage] = useState("未下发浇灌命令");
+  const [irrigationRemainingSec, setIrrigationRemainingSec] = useState<number | null>(null);
+  const [irrigationEndsAt, setIrrigationEndsAt] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const isOnline = device.status === "online";
+
+  useEffect(() => {
+    if (!irrigationEndsAt) {
+      return;
+    }
+
+    const updateCountdown = () => {
+      const remaining = Math.max(0, Math.ceil((irrigationEndsAt - Date.now()) / 1000));
+      setIrrigationRemainingSec(remaining);
+      if (remaining <= 0) {
+        setIrrigationEndsAt(null);
+        setCommandMessage("浇灌倒计时结束，设备应已自动关闭");
+        void onRefresh();
+      }
+    };
+
+    updateCountdown();
+    const timer = window.setInterval(updateCountdown, 1000);
+    return () => window.clearInterval(timer);
+  }, [irrigationEndsAt, onRefresh]);
 
   async function openPreview() {
     if (!token) {
@@ -151,7 +173,10 @@ function DeviceRow({
         throw new Error(`浇灌命令下发失败：${response.status}`);
       }
       const command = await response.json();
-      setCommandMessage(`已下发 ${command.durationSec} 秒浇灌命令，状态：${command.status}`);
+      const countdownSec = Number(command.durationSec ?? durationSec);
+      setIrrigationRemainingSec(countdownSec);
+      setIrrigationEndsAt(Date.now() + countdownSec * 1000);
+      setCommandMessage(`正在浇灌，剩余 ${countdownSec} 秒`);
       await onRefresh();
     } catch (error) {
       setCommandMessage(error instanceof Error ? error.message : "浇灌命令下发失败");
@@ -215,6 +240,9 @@ function DeviceRow({
           </div>
           <p>{videoMessage}</p>
         </div>
+      ) : null}
+      {irrigationRemainingSec !== null && irrigationRemainingSec > 0 ? (
+        <p className="device-note countdown-note">PC页面倒计时：剩余 {irrigationRemainingSec} 秒</p>
       ) : null}
       <p className="device-note">{commandMessage}</p>
     </section>
