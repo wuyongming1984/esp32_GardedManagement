@@ -61,6 +61,46 @@ docker --version
 docker compose version
 ```
 
+如果 Docker 已安装，但 `docker compose up -d --build` 拉取镜像时出现 `i/o timeout`、`failed to resolve reference`、`registry-1.docker.io` 超时，说明服务器访问 Docker Hub 不稳定。建议在阿里云控制台打开：
+
+```text
+容器镜像服务 ACR -> 镜像工具 -> 镜像加速器
+```
+
+复制你的专属加速器地址，然后在服务器执行：
+
+```bash
+mkdir -p /etc/docker
+nano /etc/docker/daemon.json
+```
+
+写入下面内容，把地址替换成阿里云给你的专属地址：
+
+```json
+{
+  "registry-mirrors": [
+    "https://你的专属ID.mirror.aliyuncs.com"
+  ],
+  "max-concurrent-downloads": 1
+}
+```
+
+保存后重启 Docker：
+
+```bash
+systemctl daemon-reload
+systemctl restart docker
+docker info | grep -A 10 "Registry Mirrors"
+```
+
+然后重新启动服务：
+
+```bash
+cd ~/esp32_GardedManagement/deploy
+docker compose up -d --build
+docker compose ps
+```
+
 ## 4. 下载代码
 
 ```bash
