@@ -190,12 +190,12 @@ export class PrismaPersistenceService implements OnModuleInit, OnModuleDestroy {
       ])
     );
     store.shareLinks = new Map(
-      shareLinks.map((link) => [
+      shareLinks.filter((link) => link.deviceId && store.devices.has(link.deviceId)).map((link) => [
         link.id,
         {
           id: link.id,
           customerId: link.customerId,
-          deviceId: link.deviceId ?? "",
+          deviceId: link.deviceId!,
           tokenHash: link.tokenHash,
           createdByUserId: link.createdByUserId,
           createdAt: link.createdAt,
@@ -352,7 +352,13 @@ export class PrismaPersistenceService implements OnModuleInit, OnModuleDestroy {
         });
       }
 
+      await this.prisma.customerShareLink.deleteMany({ where: { deviceId: null } });
+
       for (const link of store.shareLinks.values()) {
+        if (!link.deviceId || !store.devices.has(link.deviceId)) {
+          continue;
+        }
+
         await this.prisma.customerShareLink.upsert({
           where: { id: link.id },
           create: link,
