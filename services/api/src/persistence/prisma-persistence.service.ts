@@ -65,6 +65,7 @@ export class PrismaPersistenceService implements OnModuleInit, OnModuleDestroy {
       users,
       customers,
       devices,
+      deviceLayouts,
       assignments,
       commands,
       schedules,
@@ -75,6 +76,7 @@ export class PrismaPersistenceService implements OnModuleInit, OnModuleDestroy {
       this.prisma.user.findMany(),
       this.prisma.customer.findMany(),
       this.prisma.device.findMany(),
+      this.prisma.deviceLayout.findMany(),
       this.prisma.deviceAssignment.findMany(),
       this.prisma.irrigationCommand.findMany(),
       this.prisma.irrigationSchedule.findMany(),
@@ -112,6 +114,21 @@ export class PrismaPersistenceService implements OnModuleInit, OnModuleDestroy {
           mjpegStreamUrl: device.mjpegStreamUrl ?? undefined,
           mqttStatusTopic: device.mqttStatusTopic,
           mqttEventsTopic: device.mqttEventsTopic
+        }
+      ])
+    );
+    store.deviceLayouts = new Map(
+      deviceLayouts.map((layout) => [
+        layout.deviceId,
+        {
+          deviceId: layout.deviceId,
+          title: layout.title,
+          xPct: layout.xPct,
+          yPct: layout.yPct,
+          widthPct: layout.widthPct,
+          heightPct: layout.heightPct,
+          zIndex: layout.zIndex,
+          updatedAt: layout.updatedAt
         }
       ])
     );
@@ -268,6 +285,29 @@ export class PrismaPersistenceService implements OnModuleInit, OnModuleDestroy {
           where: { id: assignment.id },
           create: assignment,
           update: { customerId: assignment.customerId, deviceId: assignment.deviceId }
+        });
+      }
+
+      for (const layout of store.deviceLayouts.values()) {
+        await this.prisma.deviceLayout.upsert({
+          where: { deviceId: layout.deviceId },
+          create: {
+            deviceId: layout.deviceId,
+            title: layout.title,
+            xPct: layout.xPct,
+            yPct: layout.yPct,
+            widthPct: layout.widthPct,
+            heightPct: layout.heightPct,
+            zIndex: layout.zIndex
+          },
+          update: {
+            title: layout.title,
+            xPct: layout.xPct,
+            yPct: layout.yPct,
+            widthPct: layout.widthPct,
+            heightPct: layout.heightPct,
+            zIndex: layout.zIndex
+          }
         });
       }
 

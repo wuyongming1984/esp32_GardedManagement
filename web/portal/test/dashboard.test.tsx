@@ -8,17 +8,76 @@ describe("DashboardShell device management", () => {
     vi.restoreAllMocks();
   });
 
-  it("shows a searchable table and a right-side device drawer for platform admins", () => {
+  it("shows a freeform field map and a right-side device drawer for platform admins", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.endsWith("/api/admin/device-layouts")) {
+          return Response.json({ items: [] });
+        }
+        throw new Error(`Unexpected fetch ${url}`);
+      })
+    );
+
     render(<DashboardShell initialState={adminFixture} initialToken="test-token" autoRefresh={false} />);
 
     expect(screen.getByRole("heading", { name: "苗圃智能控制中心" })).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "搜索设备名称或编号" })).toBeInTheDocument();
-    expect(screen.getByRole("table", { name: "设备管理表格" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "自由场地图" })).toBeInTheDocument();
+    expect(await screen.findByText("已自动保存")).toBeInTheDocument();
+    expect(screen.queryByRole("table", { name: "设备管理表格" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "生成客户链接" })).toBeInTheDocument();
 
-    fireEvent.click(screen.getAllByRole("button", { name: "查看" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: /查看 device-north-01/ }));
     expect(screen.getByRole("complementary", { name: "设备详情" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: adminFixture.devices[0].displayName })).toBeInTheDocument();
+  });
+
+  it("auto-saves a device card layout after editing and dragging it", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/api/admin/device-layouts") && (!init?.method || init.method === "GET")) {
+        return Response.json({
+          items: [
+            {
+              deviceId: "device-north-01",
+              title: "North irregular bed",
+              xPct: 10,
+              yPct: 12,
+              widthPct: 24,
+              heightPct: 20,
+              zIndex: 1
+            }
+          ]
+        });
+      }
+      if (url.endsWith("/api/admin/device-layouts") && init?.method === "PUT") {
+        const body = JSON.parse(String(init.body)) as { items: Array<{ deviceId: string; xPct: number; yPct: number }> };
+        expect(body.items.some((item) => item.deviceId === "device-north-01" && item.xPct !== 10 && item.yPct !== 12)).toBe(true);
+        return Response.json(body);
+      }
+      throw new Error(`Unexpected fetch ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<DashboardShell initialState={adminFixture} initialToken="test-token" autoRefresh={false} />);
+
+    expect(await screen.findByText("North irregular bed")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "编辑布局" }));
+    const card = screen.getByRole("button", { name: /查看 device-north-01/ });
+
+    fireEvent.pointerDown(card, { clientX: 100, clientY: 100, pointerId: 1 });
+    fireEvent.pointerMove(window, { clientX: 220, clientY: 180, pointerId: 1 });
+    fireEvent.pointerUp(window, { clientX: 220, clientY: 180, pointerId: 1 });
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/admin/device-layouts",
+        expect.objectContaining({ method: "PUT" })
+      )
+    );
+    expect(await screen.findByText("已自动保存")).toBeInTheDocument();
   });
 
   it("creates one-time and daily irrigation schedules from the detail drawer", async () => {
@@ -32,7 +91,7 @@ describe("DashboardShell device management", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     render(<DashboardShell initialState={adminFixture} initialToken="test-token" autoRefresh={false} />);
-    fireEvent.click(screen.getAllByRole("button", { name: "查看" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: /查看 device-north-01/ }));
     fireEvent.change(screen.getByLabelText("一次预约时间"), { target: { value: "2026-07-08T09:30" } });
     fireEvent.change(screen.getByLabelText("一次浇灌秒数"), { target: { value: "60" } });
     fireEvent.click(screen.getByRole("button", { name: "创建一次预约" }));

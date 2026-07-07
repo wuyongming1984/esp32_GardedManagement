@@ -114,6 +114,43 @@ describe("admin share links and device paging", () => {
     admin.revokeShareLink(link.id, adminAuth);
     expect(() => auth.exchangeShareLink(token)).toThrow(UnauthorizedException);
   });
+
+  it("stores freeform device card layouts for platform admins only", () => {
+    const controller = new AdminController();
+
+    expect(() => controller.deviceLayouts(customerAuth)).toThrow(UnauthorizedException);
+
+    const saved = controller.saveDeviceLayouts(
+      {
+        items: [
+          {
+            deviceId: "device-north-01",
+            title: "North irregular bed",
+            xPct: 13.5,
+            yPct: 21,
+            widthPct: 28,
+            heightPct: 24,
+            zIndex: 7
+          }
+        ]
+      },
+      adminAuth
+    );
+
+    expect(saved.items).toHaveLength(1);
+    expect(saved.items[0]).toMatchObject({
+      deviceId: "device-north-01",
+      title: "North irregular bed",
+      xPct: 13.5,
+      yPct: 21,
+      widthPct: 28,
+      heightPct: 24,
+      zIndex: 7
+    });
+    expect(controller.deviceLayouts(adminAuth).items).toEqual(
+      expect.arrayContaining([expect.objectContaining({ deviceId: "device-north-01", xPct: 13.5, zIndex: 7 })])
+    );
+  });
 });
 
 describe("irrigation schedules", () => {

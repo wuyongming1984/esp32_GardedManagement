@@ -46,6 +46,17 @@ export interface DeviceAssignment {
   deviceId: string;
 }
 
+export interface DeviceLayout {
+  deviceId: string;
+  title: string;
+  xPct: number;
+  yPct: number;
+  widthPct: number;
+  heightPct: number;
+  zIndex: number;
+  updatedAt?: Date;
+}
+
 export interface IrrigationCommand {
   id: string;
   actorUserId: string;
@@ -115,6 +126,7 @@ export interface NurseryStore {
   users: Map<string, User>;
   customers: Map<string, Customer>;
   devices: Map<string, Device>;
+  deviceLayouts: Map<string, DeviceLayout>;
   assignments: Map<string, DeviceAssignment>;
   irrigationCommands: Map<string, IrrigationCommand>;
   irrigationSchedules: Map<string, IrrigationSchedule>;

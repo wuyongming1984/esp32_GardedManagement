@@ -71,6 +71,7 @@ model Device {
   mjpegStreamUrl       String?
   mqttStatusTopic      String
   mqttEventsTopic      String
+  layout              DeviceLayout?
   assignments         DeviceAssignment[]
   videoSessions       VideoSession[]
   irrigationCommands  IrrigationCommand[]
@@ -78,6 +79,18 @@ model Device {
   shareLinks          CustomerShareLink[]
   auditLogs           AuditLog[]
   createdAt           DateTime              @default(now())
+}
+
+model DeviceLayout {
+  deviceId  String   @id
+  title     String
+  xPct      Float
+  yPct      Float
+  widthPct  Float
+  heightPct Float
+  zIndex    Int
+  updatedAt DateTime @updatedAt
+  device    Device   @relation(fields: [deviceId], references: [id])
 }
 
 model DeviceAssignment {

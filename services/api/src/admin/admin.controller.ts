@@ -1,7 +1,7 @@
-import { Body, Controller, Get, Headers, Param, Patch, Post, Query, UnauthorizedException } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Get, Headers, Param, Patch, Post, Put, Query, UnauthorizedException } from "@nestjs/common";
 import { appState } from "../app-state.js";
 import { actorFromAuthorizationHeader } from "../auth/auth.controller.js";
-import { Device, DeviceStatus } from "../domain/types.js";
+import { Device, DeviceLayout, DeviceStatus } from "../domain/types.js";
 
 function requireAdmin(authorization?: string) {
   const userId = actorFromAuthorizationHeader(authorization);
@@ -20,6 +20,52 @@ function withAssignmentDetails(device: Device) {
     customerId: assignment?.customerId,
     customerName: customer?.name
   };
+}
+
+function clampNumber(value: unknown, min: number, max: number, fallback: number) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+  return Math.min(max, Math.max(min, parsed));
+}
+
+function defaultLayoutForDevice(device: Device, index: number): DeviceLayout {
+  const column = index % 3;
+  const row = Math.floor(index / 3);
+  return {
+    deviceId: device.id,
+    title: device.location || device.displayName,
+    xPct: 6 + column * 30,
+    yPct: 10 + row * 28,
+    widthPct: 24,
+    heightPct: 20,
+    zIndex: index + 1
+  };
+}
+
+function sanitizeLayout(input: Partial<DeviceLayout>, index: number): DeviceLayout {
+  if (!input.deviceId || !appState.store.devices.has(input.deviceId)) {
+    throw new BadRequestException("Device layout deviceId is invalid");
+  }
+  const device = appState.store.devices.get(input.deviceId)!;
+  return {
+    deviceId: input.deviceId,
+    title: input.title?.trim() || device.location || device.displayName,
+    xPct: clampNumber(input.xPct, 0, 94, 6 + (index % 3) * 30),
+    yPct: clampNumber(input.yPct, 0, 94, 10 + Math.floor(index / 3) * 28),
+    widthPct: clampNumber(input.widthPct, 12, 80, 24),
+    heightPct: clampNumber(input.heightPct, 12, 80, 20),
+    zIndex: Math.round(clampNumber(input.zIndex, 1, 9999, index + 1)),
+    updatedAt: new Date()
+  };
+}
+
+function listDeviceLayouts() {
+  return Array.from(appState.store.devices.values()).map((device, index) => {
+    const layout = appState.store.deviceLayouts.get(device.id);
+    return layout ?? defaultLayoutForDevice(device, index);
+  });
 }
 
 @Controller("admin")
@@ -142,6 +188,24 @@ export class AdminController {
     return Array.from(appState.store.assignments.values()).filter(
       (assignment) => assignment.customerId === customerId
     );
+  }
+
+  @Get("device-layouts")
+  deviceLayouts(@Headers("authorization") authorization?: string) {
+    requireAdmin(authorization);
+    return { items: listDeviceLayouts() };
+  }
+
+  @Put("device-layouts")
+  saveDeviceLayouts(
+    @Body() body: { items?: Array<Partial<DeviceLayout>> },
+    @Headers("authorization") authorization?: string
+  ) {
+    requireAdmin(authorization);
+    const items = body.items ?? [];
+    const saved = items.map((item, index) => sanitizeLayout(item, index));
+    saved.forEach((layout) => appState.store.deviceLayouts.set(layout.deviceId, layout));
+    return { items: saved };
   }
 
   @Get("share-links")

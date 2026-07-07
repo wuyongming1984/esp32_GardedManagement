@@ -26,6 +26,17 @@ export interface PortalDevice {
   nextScheduleLabel?: string;
 }
 
+export interface PortalDeviceLayout {
+  deviceId: string;
+  title: string;
+  xPct: number;
+  yPct: number;
+  widthPct: number;
+  heightPct: number;
+  zIndex: number;
+  updatedAt?: string;
+}
+
 export interface AuditItem {
   id: string;
   label: string;
@@ -35,5 +46,6 @@ export interface AuditItem {
 export interface PortalState {
   user: PortalUser;
   devices: PortalDevice[];
+  deviceLayouts?: PortalDeviceLayout[];
   audit: AuditItem[];
 }
