@@ -17,7 +17,7 @@ import {
   Wifi,
   WifiOff
 } from "lucide-react";
-import { type FormEvent, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type ChangeEvent, type FormEvent, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PortalDevice, PortalDeviceLayout, PortalState, PortalUser } from "./types";
 
 interface DashboardShellProps {
@@ -303,6 +303,22 @@ export function DashboardShell({ initialState, initialToken, initialShareToken, 
     replaceDeviceLayouts(next);
     return next;
   }, [replaceDeviceLayouts, state.devices]);
+
+  const rebindSelectedLayout = useCallback((event: ChangeEvent<HTMLSelectElement>) => {
+    const nextDeviceId = event.target.value;
+    if (!isAdmin || !selectedDeviceId || nextDeviceId === selectedDeviceId) return;
+
+    const current = mergeDeviceLayouts(state.devices, deviceLayoutsRef.current);
+    const selectedLayout = current.find((layout) => layout.deviceId === selectedDeviceId);
+    if (!selectedLayout || !state.devices.some((device) => device.id === nextDeviceId)) return;
+
+    const next = current
+      .filter((layout) => layout.deviceId !== nextDeviceId)
+      .map((layout) => (layout.deviceId === selectedDeviceId ? { ...layout, deviceId: nextDeviceId } : layout));
+    replaceDeviceLayouts(next);
+    setSelectedDeviceId(nextDeviceId);
+    void persistLayouts(next);
+  }, [isAdmin, persistLayouts, replaceDeviceLayouts, selectedDeviceId, state.devices]);
 
   const canvasMetrics = useCallback(() => {
     const rect = canvasRef.current?.getBoundingClientRect();
@@ -744,6 +760,16 @@ export function DashboardShell({ initialState, initialToken, initialShareToken, 
                   <button type="button" className="icon-button" disabled={!selectedDevice} onClick={() => void moveSelectedLayer("front")}>置顶</button>
                   <button type="button" className="icon-button" disabled={!selectedDevice} onClick={() => void moveSelectedLayer("back")}>置底</button>
                   <button type="button" className="icon-button" onClick={() => void resetLayouts()}>重置布局</button>
+                  {editLayout && selectedDevice ? (
+                    <label className="layout-binding-field">
+                      <span>绑定开发板</span>
+                      <select value={selectedDevice.id} onChange={rebindSelectedLayout}>
+                        {state.devices.map((device) => (
+                          <option key={device.id} value={device.id}>{device.displayName}</option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
                 </>
               ) : null}
               <span className={`layout-save ${layoutSaveState}`}>{saveStateLabel(layoutSaveState)}</span>

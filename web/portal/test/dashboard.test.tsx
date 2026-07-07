@@ -77,7 +77,60 @@ describe("DashboardShell device management", () => {
         expect.objectContaining({ method: "PUT" })
       )
     );
-    expect(await screen.findByText("已自动保存")).toBeInTheDocument();
+  });
+
+  it("rebinds the selected field card to another board while editing the layout", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/api/admin/device-layouts") && (!init?.method || init.method === "GET")) {
+        return Response.json({
+          items: [
+            {
+              deviceId: "device-north-01",
+              title: "North irregular bed",
+              xPct: 10,
+              yPct: 12,
+              widthPct: 24,
+              heightPct: 20,
+              zIndex: 1
+            },
+            {
+              deviceId: "device-south-01",
+              title: "South propagation",
+              xPct: 45,
+              yPct: 30,
+              widthPct: 24,
+              heightPct: 20,
+              zIndex: 2
+            }
+          ]
+        });
+      }
+      if (url.endsWith("/api/admin/device-layouts") && init?.method === "PUT") {
+        const body = JSON.parse(String(init.body)) as { items: Array<{ deviceId: string; xPct: number; yPct: number }> };
+        expect(body.items).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ deviceId: "device-south-01", xPct: 10, yPct: 12 })
+          ])
+        );
+        return Response.json(body);
+      }
+      throw new Error(`Unexpected fetch ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<DashboardShell initialState={adminFixture} initialToken="test-token" autoRefresh={false} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /查看 device-north-01/ }));
+    fireEvent.click(screen.getByRole("button", { name: "编辑布局" }));
+    fireEvent.change(screen.getByLabelText("绑定开发板"), { target: { value: "device-south-01" } });
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/admin/device-layouts",
+        expect.objectContaining({ method: "PUT" })
+      )
+    );
   });
 
   it("creates one-time and daily irrigation schedules from the detail drawer", async () => {

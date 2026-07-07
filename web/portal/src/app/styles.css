@@ -390,6 +390,24 @@ button.filter-chip {
   color: var(--danger);
 }
 
+.layout-binding-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.layout-binding-field select {
+  min-height: 34px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+}
+
 .field-map {
   position: relative;
   min-height: 520px;
