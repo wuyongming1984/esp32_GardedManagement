@@ -30,6 +30,7 @@ export interface Device {
   location: string;
   status: DeviceStatus;
   irrigationState: IrrigationState;
+  irrigationRemainingSec?: number;
   lastSeenAt?: Date;
   mjpegStreamUrl?: string;
   mqttStatusTopic: string;

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createSeededNurseryDomain } from "../src/domain/seed.js";
 import {
+  applyDeviceStatusPayload,
   buildIrrigationCommandPayload,
   isAllowedMjpegUrl,
   parseDeviceStatusPayload,
@@ -44,6 +45,32 @@ describe("MQTT device status parsing", () => {
       updatedAt: new Date("2026-07-07T00:00:00.000Z")
     });
     expect(domain.store.latestMjpegFrames.get("device-north-01")?.data.equals(frame)).toBe(true);
+  });
+
+  it("applies device-originated irrigation countdown status to the store", () => {
+    const domain = createSeededNurseryDomain();
+
+    const updated = applyDeviceStatusPayload(
+      domain.store,
+      "device-north-01",
+      Buffer.from(
+        JSON.stringify({
+          status: "online",
+          irrigationState: "on",
+          irrigationRemainingSec: 12,
+          mjpegUrl: "http://192.168.110.184:8080/stream.mjpg"
+        })
+      ),
+      new Date("2026-07-07T01:02:03.000Z")
+    );
+
+    const device = domain.store.devices.get("device-north-01");
+    expect(updated).toBe(true);
+    expect(device?.status).toBe("online");
+    expect(device?.lastSeenAt).toEqual(new Date("2026-07-07T01:02:03.000Z"));
+    expect(device?.irrigationState).toBe("on");
+    expect(device?.irrigationRemainingSec).toBe(12);
+    expect(device?.mjpegStreamUrl).toBe("http://192.168.110.184:8080/stream.mjpg");
   });
 
   it("builds irrigation command payloads for device MQTT handlers", () => {

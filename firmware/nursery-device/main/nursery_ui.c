@@ -12,6 +12,7 @@
 #include "freertos/task.h"
 #include "lvgl.h"
 #include "nursery_irrigation.h"
+#include "nursery_mqtt.h"
 #include "nursery_wifi.h"
 
 static const char *TAG = "nursery_ui";
@@ -106,7 +107,7 @@ static void set_irrigation_overlay(bool visible, uint32_t remaining_sec)
     }
 
     char text[64];
-    snprintf(text, sizeof(text), "PC浇灌中\n剩余 %lu 秒", (unsigned long)remaining_sec);
+    snprintf(text, sizeof(text), "浇灌中\n剩余 %lu 秒", (unsigned long)remaining_sec);
     set_label_text(s_irrigation_overlay_label, text);
     lv_obj_remove_flag(s_irrigation_overlay, LV_OBJ_FLAG_HIDDEN);
     lv_obj_move_foreground(s_irrigation_overlay);
@@ -129,7 +130,7 @@ static void update_irrigation_status_label(void)
                  sizeof(text),
                  s_irrigation_from_pc ? "PC浇灌运行中，剩余 %lu 秒" : "浇灌运行中，剩余 %lu 秒",
                  (unsigned long)remaining_sec);
-        set_irrigation_overlay(s_irrigation_from_pc, remaining_sec);
+        set_irrigation_overlay(true, remaining_sec);
     } else {
         s_irrigation_from_pc = false;
         s_irrigation_activate_pending = false;
@@ -340,6 +341,7 @@ static void irrigation_start_cb(lv_event_t *event)
     }
     s_irrigation_from_pc = false;
     update_irrigation_status_label();
+    nursery_mqtt_publish_status();
 }
 
 static void irrigation_stop_cb(lv_event_t *event)
@@ -348,6 +350,7 @@ static void irrigation_stop_cb(lv_event_t *event)
     nursery_irrigation_safe_off("local screen stop");
     s_irrigation_from_pc = false;
     update_irrigation_status_label();
+    nursery_mqtt_publish_status();
 }
 
 static void irrigation_timer_cb(lv_timer_t *timer)

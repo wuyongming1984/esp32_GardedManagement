@@ -14,6 +14,7 @@ export interface PortalDevice {
   location: string;
   status: DeviceStatus;
   irrigationState: IrrigationState;
+  irrigationRemainingSec?: number;
   lastSeenAt?: string;
   lastSeenLabel: string;
   mjpegStreamUrl?: string;

@@ -17,10 +17,12 @@
 static const char *TAG = "nursery_mqtt";
 #define NURSERY_MQTT_FRAME_MAX (512 * 1024)
 #define NURSERY_MQTT_FRAME_INTERVAL_MS 1000
+#define NURSERY_MQTT_STATUS_INTERVAL_MS 1000
 static esp_mqtt_client_handle_t s_client;
 static nursery_config_t s_config;
 static bool s_mqtt_connected;
 static bool s_frame_task_started;
+static bool s_status_task_started;
 
 static void mjpeg_frame_publish_task(void *arg)
 {
@@ -70,20 +72,33 @@ static void publish_event(const char *event, const char *detail)
     esp_mqtt_client_publish(s_client, topic, payload, 0, 1, 0);
 }
 
+static void status_publish_task(void *arg)
+{
+    (void)arg;
+    while (true) {
+        if (s_mqtt_connected) {
+            nursery_mqtt_publish_status();
+        }
+        vTaskDelay(pdMS_TO_TICKS(NURSERY_MQTT_STATUS_INTERVAL_MS));
+    }
+}
+
 void nursery_mqtt_publish_status(void)
 {
     if (!s_client) {
         return;
     }
     char topic[128];
-    char payload[320];
+    char payload[384];
     const char *ip_text = nursery_wifi_current_ip();
+    uint32_t remaining_sec = nursery_irrigation_remaining_sec();
     snprintf(topic, sizeof(topic), "devices/%s/status", s_config.device_id);
     snprintf(
         payload,
         sizeof(payload),
-        "{\"status\":\"online\",\"irrigationState\":\"%s\",\"localIp\":\"%s\",\"mjpegUrl\":\"http://%s:8080/stream.mjpg\"}",
+        "{\"status\":\"online\",\"irrigationState\":\"%s\",\"irrigationRemainingSec\":%lu,\"localIp\":\"%s\",\"mjpegUrl\":\"http://%s:8080/stream.mjpg\"}",
         nursery_irrigation_state() == NURSERY_IRRIGATION_ON ? "on" : "off",
+        (unsigned long)remaining_sec,
         ip_text,
         ip_text
     );
@@ -167,6 +182,21 @@ esp_err_t nursery_mqtt_start(const nursery_config_t *config)
             s_frame_task_started = true;
         } else {
             ESP_LOGW(TAG, "mjpeg relay task create failed");
+        }
+    }
+    if (!s_status_task_started) {
+        BaseType_t task = xTaskCreatePinnedToCore(
+            status_publish_task,
+            "mqtt_status",
+            4096,
+            NULL,
+            3,
+            NULL,
+            0);
+        if (task == pdPASS) {
+            s_status_task_started = true;
+        } else {
+            ESP_LOGW(TAG, "status publish task create failed");
         }
     }
     return esp_mqtt_client_start(s_client);

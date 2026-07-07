@@ -5,6 +5,7 @@ import { IrrigationCommand, NurseryStore } from "../domain/types.js";
 
 interface DeviceStatusPayload {
   irrigationState?: "on" | "off";
+  irrigationRemainingSec?: number;
   mjpegUrl?: string;
 }
 
@@ -45,15 +46,7 @@ export class MqttBridgeService implements OnModuleInit {
         return;
       }
       if (channel === "status") {
-        const status = parseDeviceStatusPayload(payload);
-        device.status = "online";
-        device.lastSeenAt = new Date();
-        if (status?.irrigationState) {
-          device.irrigationState = status.irrigationState;
-        }
-        if (status?.mjpegUrl && isAllowedMjpegUrl(status.mjpegUrl)) {
-          device.mjpegStreamUrl = status.mjpegUrl;
-        }
+        applyDeviceStatusPayload(appState.store, deviceId, payload);
       }
       if (channel === "events") {
         this.logger.log(`Device event ${deviceId}: ${payload.toString()}`);
@@ -96,6 +89,35 @@ export function storeDeviceMjpegFrame(
   device.status = "online";
   device.lastSeenAt = now;
   device.mjpegStreamUrl = `/api/devices/${deviceId}/mjpeg/latest.jpg`;
+  return true;
+}
+
+export function applyDeviceStatusPayload(
+  store: NurseryStore,
+  deviceId: string,
+  payload: Buffer,
+  now: Date = new Date()
+): boolean {
+  const device = store.devices.get(deviceId);
+  const status = parseDeviceStatusPayload(payload);
+  if (!device || !status) {
+    return false;
+  }
+
+  device.status = "online";
+  device.lastSeenAt = now;
+  if (status.irrigationState) {
+    device.irrigationState = status.irrigationState;
+  }
+  if (Number.isFinite(status.irrigationRemainingSec)) {
+    device.irrigationRemainingSec = Math.max(0, Math.floor(status.irrigationRemainingSec ?? 0));
+  } else if (status.irrigationState === "off") {
+    device.irrigationRemainingSec = 0;
+  }
+  if (status.mjpegUrl && isAllowedMjpegUrl(status.mjpegUrl)) {
+    device.mjpegStreamUrl = status.mjpegUrl;
+  }
+
   return true;
 }
 

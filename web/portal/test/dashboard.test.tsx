@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { DashboardShell, resolvePreviewUrl } from "../src/lib/dashboard-shell";
+import { DashboardShell, appendPreviewFrameParam, resolvePreviewUrl } from "../src/lib/dashboard-shell";
 import { adminFixture, customerFixture } from "../src/lib/fixtures";
 
 describe("DashboardShell", () => {
@@ -35,6 +35,16 @@ describe("DashboardShell", () => {
     );
     expect(resolvePreviewUrl("http://172.20.10.10:8080/stream.mjpg")).toBe("http://172.20.10.10:8080/stream.mjpg");
     expect(resolvePreviewUrl(null)).toBeNull();
+  });
+
+  it("adds a frame parameter to force live preview image refreshes", () => {
+    expect(appendPreviewFrameParam("http://127.0.0.1:3001/api/devices/device-north-01/mjpeg/latest.jpg?token=abc.def", 3)).toBe(
+      "http://127.0.0.1:3001/api/devices/device-north-01/mjpeg/latest.jpg?token=abc.def&frame=3"
+    );
+    expect(appendPreviewFrameParam("http://172.20.10.10:8080/stream.mjpg", 4)).toBe(
+      "http://172.20.10.10:8080/stream.mjpg?frame=4"
+    );
+    expect(appendPreviewFrameParam(null, 4)).toBeNull();
   });
 
   it("shows a PC countdown immediately after an irrigation command is accepted", async () => {
@@ -73,5 +83,42 @@ describe("DashboardShell", () => {
     fireEvent.click(screen.getByRole("button", { name: /下发限时浇灌/ }));
 
     expect(await screen.findByText(/PC页面倒计时：剩余 9 秒/)).toBeInTheDocument();
+  });
+});
+
+describe("DashboardShell device status synchronization", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("shows a device-side irrigation countdown from refreshed device status", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.endsWith("/auth/login")) {
+          return Response.json({ accessToken: "test-token" });
+        }
+        if (url.endsWith("/api/devices")) {
+          return Response.json([
+            {
+              id: "device-north-01",
+              displayName: "North Greenhouse P4",
+              location: "North greenhouse bench A",
+              status: "online",
+              irrigationState: "on",
+              irrigationRemainingSec: 12,
+              lastSeenAt: "2026-07-07T01:02:03.000Z",
+              mjpegStreamUrl: "/api/devices/device-north-01/mjpeg/latest.jpg"
+            }
+          ]);
+        }
+        throw new Error(`Unexpected fetch ${url}`);
+      })
+    );
+
+    render(<DashboardShell initialState={customerFixture} />);
+
+    expect(await screen.findByText(/设备端倒计时：剩余 12 秒/)).toBeInTheDocument();
   });
 });

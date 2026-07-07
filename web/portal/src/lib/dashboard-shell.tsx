@@ -14,6 +14,7 @@ interface ApiDevice {
   location: string;
   status: PortalDevice["status"];
   irrigationState: PortalDevice["irrigationState"];
+  irrigationRemainingSec?: number;
   lastSeenAt?: string;
   mjpegStreamUrl?: string;
 }
@@ -37,6 +38,14 @@ export function resolvePreviewUrl(value?: string | null, token?: string | null) 
     return `${API_BASE}${value}${tokenQuery}`;
   }
   return value;
+}
+
+export function appendPreviewFrameParam(value: string | null, frameSeq: number) {
+  if (!value) {
+    return null;
+  }
+  const separator = value.includes("?") ? "&" : "?";
+  return `${value}${separator}frame=${frameSeq}`;
 }
 
 function statusLabel(status: PortalDevice["status"]) {
@@ -73,6 +82,7 @@ function mapApiDevice(device: ApiDevice): PortalDevice {
     location: device.location,
     status: device.status,
     irrigationState: device.irrigationState,
+    irrigationRemainingSec: device.irrigationRemainingSec,
     lastSeenAt: device.lastSeenAt,
     lastSeenLabel: formatLastSeen(device.lastSeenAt),
     mjpegStreamUrl: device.mjpegStreamUrl,
@@ -91,6 +101,7 @@ function DeviceRow({
 }) {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(resolvePreviewUrl(device.mjpegStreamUrl));
+  const [previewFrameSeq, setPreviewFrameSeq] = useState(0);
   const [videoMessage, setVideoMessage] = useState("尚未打开预览");
   const [durationSec, setDurationSec] = useState(5);
   const [commandMessage, setCommandMessage] = useState("未下发浇灌命令");
@@ -98,6 +109,15 @@ function DeviceRow({
   const [irrigationEndsAt, setIrrigationEndsAt] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const isOnline = device.status === "online";
+
+  const pcRemainingSec = irrigationRemainingSec !== null && irrigationRemainingSec > 0 ? irrigationRemainingSec : null;
+  const deviceRemainingSec =
+    device.irrigationState === "on" && typeof device.irrigationRemainingSec === "number" && device.irrigationRemainingSec > 0
+      ? device.irrigationRemainingSec
+      : null;
+  const visibleRemainingSec = pcRemainingSec ?? deviceRemainingSec;
+  const countdownLabel = pcRemainingSec !== null ? "PC页面倒计时" : "设备端倒计时";
+  const previewImageUrl = appendPreviewFrameParam(previewUrl, previewFrameSeq);
 
   useEffect(() => {
     if (!irrigationEndsAt) {
@@ -119,6 +139,17 @@ function DeviceRow({
     return () => window.clearInterval(timer);
   }, [irrigationEndsAt, onRefresh]);
 
+  useEffect(() => {
+    if (!previewOpen) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setPreviewFrameSeq((value) => value + 1);
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [previewOpen]);
+
   async function openPreview() {
     if (!token) {
       setVideoMessage("后台登录尚未完成");
@@ -126,6 +157,7 @@ function DeviceRow({
     }
     if (previewOpen) {
       setPreviewOpen(false);
+      setPreviewFrameSeq(0);
       setVideoMessage("预览已关闭");
       return;
     }
@@ -146,6 +178,7 @@ function DeviceRow({
       const streamUrl = resolvePreviewUrl(session.mjpegUrl ?? device.mjpegStreamUrl, token);
       setPreviewOpen(true);
       setPreviewUrl(streamUrl);
+      setPreviewFrameSeq(0);
       setVideoMessage(streamUrl ? `正在读取实际摄像头画面：${session.mode}` : `视频会话已创建：${session.mode}`);
     } catch (error) {
       setVideoMessage(error instanceof Error ? error.message : "视频会话创建失败");
@@ -229,8 +262,8 @@ function DeviceRow({
       {previewOpen ? (
         <div className="preview-panel">
           <div className="preview-frame">
-            {previewUrl ? (
-              <img className="preview-image" src={previewUrl} alt={`${device.displayName} 实时摄像头画面`} />
+            {previewImageUrl ? (
+              <img className="preview-image" src={previewImageUrl} alt={`${device.displayName} 实时摄像头画面`} />
             ) : (
               <>
                 <div className="scanline" />
@@ -241,8 +274,8 @@ function DeviceRow({
           <p>{videoMessage}</p>
         </div>
       ) : null}
-      {irrigationRemainingSec !== null && irrigationRemainingSec > 0 ? (
-        <p className="device-note countdown-note">PC页面倒计时：剩余 {irrigationRemainingSec} 秒</p>
+      {visibleRemainingSec !== null ? (
+        <p className="device-note countdown-note">{countdownLabel}：剩余 {visibleRemainingSec} 秒</p>
       ) : null}
       <p className="device-note">{commandMessage}</p>
     </section>
@@ -320,7 +353,7 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
     void refreshDevices().catch((error) => setStatusMessage(error instanceof Error ? error.message : "设备刷新失败"));
     const timer = window.setInterval(() => {
       void refreshDevices().catch((error) => setStatusMessage(error instanceof Error ? error.message : "设备刷新失败"));
-    }, 5000);
+    }, 1000);
     return () => window.clearInterval(timer);
   }, [refreshDevices, token]);
 
