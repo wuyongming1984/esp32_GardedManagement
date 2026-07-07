@@ -49,13 +49,13 @@ interface ApiVideoSession {
 
 type ActiveView = "devices" | "schedules" | "links" | "account" | "audit";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:3001";
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api";
 const DEFAULT_LOGIN_EMAIL = process.env.NEXT_PUBLIC_DEMO_ADMIN_EMAIL ?? "admin@nursery.local";
 const DEFAULT_LOGIN_PASSWORD = "change-me-now";
 
 function apiUrl(path: string) {
   if (API_BASE === "/api") {
-    if (path.startsWith("/auth/") || path === "/me") {
+    if (path.startsWith("/auth/") || path === "/me" || path.startsWith("/me/")) {
       return path;
     }
     return path.startsWith("/api/") ? path : `/api${path}`;

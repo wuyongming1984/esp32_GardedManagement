@@ -11,7 +11,7 @@ describe("DashboardShell login", () => {
   it("logs in with email and password before loading the dashboard", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
-      if (url.endsWith("/auth/login")) {
+      if (url === "/auth/login") {
         expect(init?.method).toBe("POST");
         expect(init?.body).toBe(JSON.stringify({ email: "north-client@example.com", password: "change-me-now" }));
         return Response.json({
@@ -25,7 +25,7 @@ describe("DashboardShell login", () => {
           }
         });
       }
-      if (url.endsWith("/api/devices")) {
+      if (url === "/api/devices") {
         return Response.json([
           {
             id: "device-north-01",

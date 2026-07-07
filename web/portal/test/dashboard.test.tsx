@@ -110,15 +110,15 @@ describe("DashboardShell device management", () => {
 describe("preview URL helpers", () => {
   it("resolves relayed MJPEG API paths against the configured API base", () => {
     expect(resolvePreviewUrl("/api/devices/device-north-01/mjpeg/latest.jpg", "abc.def")).toBe(
-      "http://127.0.0.1:3001/api/devices/device-north-01/mjpeg/latest.jpg?token=abc.def"
+      "/api/devices/device-north-01/mjpeg/latest.jpg?token=abc.def"
     );
     expect(resolvePreviewUrl("http://172.20.10.10:8080/stream.mjpg")).toBe("http://172.20.10.10:8080/stream.mjpg");
     expect(resolvePreviewUrl(null)).toBeNull();
   });
 
   it("adds a frame parameter to force live preview image refreshes", () => {
-    expect(appendPreviewFrameParam("http://127.0.0.1:3001/api/devices/device-north-01/mjpeg/latest.jpg?token=abc.def", 3)).toBe(
-      "http://127.0.0.1:3001/api/devices/device-north-01/mjpeg/latest.jpg?token=abc.def&frame=3"
+    expect(appendPreviewFrameParam("/api/devices/device-north-01/mjpeg/latest.jpg?token=abc.def", 3)).toBe(
+      "/api/devices/device-north-01/mjpeg/latest.jpg?token=abc.def&frame=3"
     );
     expect(appendPreviewFrameParam("http://172.20.10.10:8080/stream.mjpg", 4)).toBe(
       "http://172.20.10.10:8080/stream.mjpg?frame=4"

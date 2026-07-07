@@ -7,6 +7,8 @@ COPY web/portal/package.json web/portal/package.json
 RUN npm ci --ignore-scripts --no-audit --no-fund
 
 FROM deps AS build
+ARG NEXT_PUBLIC_API_BASE_URL=/api
+ENV NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL}
 COPY web/portal web/portal
 RUN npm run build -w @nursery/portal
 

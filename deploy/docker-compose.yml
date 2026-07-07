@@ -9,7 +9,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-nursery}"]
+      test: ["CMD-SHELL", "pg_isready -U nursery -d nursery || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -73,6 +73,7 @@ services:
       dockerfile: web/portal/Dockerfile
       args:
         NODE_IMAGE: ${NODE_IMAGE:-node:22-bookworm-slim}
+        NEXT_PUBLIC_API_BASE_URL: /api
     restart: unless-stopped
     environment:
       NEXT_PUBLIC_API_BASE_URL: /api
