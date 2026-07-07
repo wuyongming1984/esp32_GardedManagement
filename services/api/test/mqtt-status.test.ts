@@ -73,6 +73,25 @@ describe("MQTT device status parsing", () => {
     expect(device?.mjpegStreamUrl).toBe("http://192.168.110.184:8080/stream.mjpg");
   });
 
+  it("updates the device display name from an English device-originated status payload", () => {
+    const domain = createSeededNurseryDomain();
+
+    const updated = applyDeviceStatusPayload(
+      domain.store,
+      "device-north-01",
+      Buffer.from(
+        JSON.stringify({
+          status: "online",
+          displayName: "P4-Plant-Bed-001",
+          irrigationState: "off"
+        })
+      )
+    );
+
+    expect(updated).toBe(true);
+    expect(domain.store.devices.get("device-north-01")?.displayName).toBe("P4-Plant-Bed-001");
+  });
+
   it("builds irrigation command payloads for device MQTT handlers", () => {
     const payload = buildIrrigationCommandPayload({
       id: "irrigation-42",
