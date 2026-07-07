@@ -1,5 +1,6 @@
 import { DeviceService } from "./device.service.js";
 import { NurseryStore, User } from "./types.js";
+import { hashPassword } from "../auth/security.js";
 
 const northDeviceMjpegUrl =
   process.env.NURSERY_DEVICE_NORTH_MJPEG_URL ?? "http://192.168.110.184:8080/stream.mjpg";
@@ -11,7 +12,9 @@ export function createEmptyStore(): NurseryStore {
     devices: new Map(),
     assignments: new Map(),
     irrigationCommands: new Map(),
+    irrigationSchedules: new Map(),
     videoSessions: new Map(),
+    shareLinks: new Map(),
     latestMjpegFrames: new Map(),
     auditLogs: []
   };
@@ -23,12 +26,14 @@ export function createSeededNurseryDomain() {
     id: "user-admin",
     email: "admin@nursery.local",
     name: "Platform Admin",
+    passwordHash: hashPassword(process.env.ADMIN_INITIAL_PASSWORD ?? "change-me-now"),
     role: "platform_admin"
   };
   const customer: User = {
     id: "user-customer-north",
     email: "north-client@example.com",
     name: "North Client",
+    passwordHash: hashPassword("change-me-now"),
     role: "customer",
     customerId: "customer-north"
   };

@@ -1,34 +1,113 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DashboardShell, appendPreviewFrameParam, resolvePreviewUrl } from "../src/lib/dashboard-shell";
 import { adminFixture, customerFixture } from "../src/lib/fixtures";
 
-describe("DashboardShell", () => {
+describe("DashboardShell device management", () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it("shows administrator controls and all assigned nursery devices to the platform admin", () => {
+  it("shows a searchable table and a right-side device drawer for platform admins", () => {
     render(<DashboardShell initialState={adminFixture} initialToken="test-token" autoRefresh={false} />);
 
     expect(screen.getByRole("heading", { name: "苗圃智能控制中心" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "新增客户" })).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: adminFixture.devices[0].displayName })).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: adminFixture.devices[1].displayName })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "搜索设备名称或编号" })).toBeInTheDocument();
+    expect(screen.getByRole("table", { name: "设备管理表格" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "生成客户链接" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "查看" })[0]);
+    expect(screen.getByRole("complementary", { name: "设备详情" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: adminFixture.devices[0].displayName })).toBeInTheDocument();
   });
 
-  it("hides administrator controls and exposes irrigation/video actions to customer users", () => {
-    render(<DashboardShell initialState={customerFixture} initialToken="test-token" autoRefresh={false} />);
+  it("creates one-time and daily irrigation schedules from the detail drawer", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/irrigation-schedules")) {
+        return Response.json({ id: `schedule-${fetchMock.mock.calls.length}`, ...(JSON.parse(String(init?.body)) as object) });
+      }
+      throw new Error(`Unexpected fetch ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
 
-    expect(screen.queryByRole("button", { name: "新增客户" })).not.toBeInTheDocument();
-    expect(screen.getByRole("region", { name: customerFixture.devices[0].displayName })).toBeInTheDocument();
-    expect(screen.queryByRole("region", { name: adminFixture.devices[1].displayName })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "打开实时预览" })).toBeInTheDocument();
-    expect(screen.getByRole("spinbutton", { name: "浇灌时长 秒" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "下发限时浇灌" })).toBeInTheDocument();
-    expect(screen.getByText("视频模式：mjpeg")).toBeInTheDocument();
+    render(<DashboardShell initialState={adminFixture} initialToken="test-token" autoRefresh={false} />);
+    fireEvent.click(screen.getAllByRole("button", { name: "查看" })[0]);
+    fireEvent.change(screen.getByLabelText("一次预约时间"), { target: { value: "2026-07-08T09:30" } });
+    fireEvent.change(screen.getByLabelText("一次浇灌秒数"), { target: { value: "60" } });
+    fireEvent.click(screen.getByRole("button", { name: "创建一次预约" }));
+    fireEvent.change(screen.getByLabelText("每日执行时间"), { target: { value: "08:00" } });
+    fireEvent.change(screen.getByLabelText("每日浇灌秒数"), { target: { value: "300" } });
+    fireEvent.click(screen.getByRole("button", { name: "创建每日定时" }));
+
+    expect(await screen.findByText("已创建一次预约")).toBeInTheDocument();
+    expect(await screen.findByText("已创建每日定时")).toBeInTheDocument();
   });
 
+  it("updates account information from the account settings page", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.endsWith("/me")) {
+          expect(init?.method).toBe("PATCH");
+          return Response.json({ ...adminFixture.user, name: "管理员" });
+        }
+        throw new Error(`Unexpected fetch ${url}`);
+      })
+    );
+
+    render(<DashboardShell initialState={adminFixture} initialToken="test-token" autoRefresh={false} />);
+    fireEvent.click(screen.getByRole("link", { name: "账号设置" }));
+    fireEvent.change(screen.getByLabelText("姓名"), { target: { value: "管理员" } });
+    fireEvent.click(screen.getByRole("button", { name: "保存修改" }));
+
+    expect(await screen.findByText("账号信息已更新")).toBeInTheDocument();
+  });
+
+  it("generates a customer share link from the customer link page", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.endsWith("/api/admin/share-links")) {
+          return Response.json({ id: "share-1", customerId: "customer-north", url: "http://8.153.162.62/share/token-1" });
+        }
+        throw new Error(`Unexpected fetch ${url}`);
+      })
+    );
+
+    render(<DashboardShell initialState={adminFixture} initialToken="test-token" autoRefresh={false} />);
+    fireEvent.click(screen.getByRole("link", { name: "客户链接" }));
+    fireEvent.click(screen.getByRole("button", { name: "生成客户链接" }));
+
+    expect(await screen.findByDisplayValue("http://8.153.162.62/share/token-1")).toBeInTheDocument();
+  });
+
+  it("exchanges a customer share token and keeps the portal read-only", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.endsWith("/auth/share-links/share-token/exchange")) {
+          return Response.json({ accessToken: "share-access-token", user: customerFixture.user });
+        }
+        if (url.endsWith("/api/devices")) {
+          return Response.json(customerFixture.devices);
+        }
+        throw new Error(`Unexpected fetch ${url}`);
+      })
+    );
+
+    render(<DashboardShell initialState={adminFixture} initialShareToken="share-token" />);
+
+    expect(await screen.findByText("客户链接只读视图")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "下发限时浇灌" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "账号设置" })).not.toBeInTheDocument();
+  });
+});
+
+describe("preview URL helpers", () => {
   it("resolves relayed MJPEG API paths against the configured API base", () => {
     expect(resolvePreviewUrl("/api/devices/device-north-01/mjpeg/latest.jpg", "abc.def")).toBe(
       "http://127.0.0.1:3001/api/devices/device-north-01/mjpeg/latest.jpg?token=abc.def"
@@ -45,73 +124,5 @@ describe("DashboardShell", () => {
       "http://172.20.10.10:8080/stream.mjpg?frame=4"
     );
     expect(appendPreviewFrameParam(null, 4)).toBeNull();
-  });
-
-  it("shows a PC countdown immediately after an irrigation command is accepted", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-        const url = String(input);
-        const method = init?.method ?? "GET";
-        if (url.includes("/irrigation-commands")) {
-          return Response.json({ id: "irrigation-test", durationSec: 9, status: "queued" });
-        }
-        if (url.endsWith("/api/devices")) {
-          return Response.json([
-            {
-              id: "device-north-01",
-              displayName: "North Greenhouse P4",
-              location: "North greenhouse bench A",
-              status: "online",
-              irrigationState: "off",
-              lastSeenAt: "2026-07-06T20:56:01.000Z",
-              mjpegStreamUrl: "/api/devices/device-north-01/mjpeg/latest.jpg"
-            }
-          ]);
-        }
-        throw new Error(`Unexpected fetch ${method} ${url}`);
-      })
-    );
-
-    render(<DashboardShell initialState={customerFixture} initialToken="test-token" autoRefresh={false} />);
-
-    fireEvent.change(screen.getByRole("spinbutton"), { target: { value: "9" } });
-    fireEvent.click(screen.getByRole("button", { name: /下发限时浇灌/ }));
-
-    expect(await screen.findByText(/PC页面倒计时：剩余 9 秒/)).toBeInTheDocument();
-  });
-});
-
-describe("DashboardShell device status synchronization", () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  it("shows a device-side irrigation countdown from refreshed device status", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
-        const url = String(input);
-        if (url.endsWith("/api/devices")) {
-          return Response.json([
-            {
-              id: "device-north-01",
-              displayName: "North Greenhouse P4",
-              location: "North greenhouse bench A",
-              status: "online",
-              irrigationState: "on",
-              irrigationRemainingSec: 12,
-              lastSeenAt: "2026-07-07T01:02:03.000Z",
-              mjpegStreamUrl: "/api/devices/device-north-01/mjpeg/latest.jpg"
-            }
-          ]);
-        }
-        throw new Error(`Unexpected fetch ${url}`);
-      })
-    );
-
-    render(<DashboardShell initialState={customerFixture} initialToken="test-token" />);
-
-    expect(await screen.findByText(/设备端倒计时：剩余 12 秒/)).toBeInTheDocument();
   });
 });

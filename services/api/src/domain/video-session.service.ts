@@ -1,8 +1,7 @@
 import { AccessControl } from "./access-control.js";
 import { AuditService } from "./audit.service.js";
+import { createDomainId } from "./id.js";
 import { NurseryStore, VideoMode, VideoSession } from "./types.js";
-
-let sessionCounter = 0;
 
 export interface OpenVideoSessionRequest {
   actorUserId: string;
@@ -23,7 +22,7 @@ export class VideoSessionService {
     this.access.assertCanUseDevice(input.actorUserId, input.deviceId);
     const device = this.access.requireDevice(input.deviceId);
     const mode = input.preferredMode ?? "webrtc";
-    const id = `video-${++sessionCounter}`;
+    const id = createDomainId("video");
     const session: VideoSession = {
       id,
       actorUserId: input.actorUserId,

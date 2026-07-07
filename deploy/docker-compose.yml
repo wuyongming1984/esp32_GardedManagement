@@ -52,7 +52,11 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql://nursery:change-me@postgres:5432/nursery}
       JWT_SECRET: ${JWT_SECRET:-dev-only-change-me}
+      ADMIN_INITIAL_PASSWORD: ${ADMIN_INITIAL_PASSWORD:-change-me-now}
       MQTT_URL: ${MQTT_URL:-mqtt://emqx:1883}
+      MQTT_USERNAME: ${MQTT_USERNAME:-}
+      MQTT_PASSWORD: ${MQTT_PASSWORD:-}
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:-http://127.0.0.1}
       WS_PORT: 3002
     depends_on:
       postgres:

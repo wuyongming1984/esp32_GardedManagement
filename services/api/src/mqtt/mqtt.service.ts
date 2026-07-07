@@ -55,11 +55,11 @@ export class MqttBridgeService implements OnModuleInit {
   }
 }
 
-export function buildIrrigationCommandPayload(command: Pick<IrrigationCommand, "id" | "durationSec">): string {
+export function buildIrrigationCommandPayload(command: Pick<IrrigationCommand, "id" | "durationSec">, source = "pc"): string {
   return JSON.stringify({
     commandId: command.id,
     durationSec: command.durationSec,
-    source: "pc"
+    source
   });
 }
 

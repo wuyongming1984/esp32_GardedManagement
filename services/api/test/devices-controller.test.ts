@@ -28,6 +28,7 @@ describe("DevicesController", () => {
     });
 
     expect(() => ensureIrrigationCommandPublished(command, () => false)).toThrow(ServiceUnavailableException);
+    expect(appState.store.irrigationCommands.get(command.id)?.status).toBe("failed");
   });
 
   it("returns the latest relayed MJPEG frame for assigned devices", () => {

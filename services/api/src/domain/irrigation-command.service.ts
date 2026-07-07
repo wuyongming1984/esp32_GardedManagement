@@ -1,8 +1,7 @@
 import { AccessControl } from "./access-control.js";
 import { AuditService } from "./audit.service.js";
+import { createDomainId } from "./id.js";
 import { IrrigationCommand, NurseryStore } from "./types.js";
-
-let commandCounter = 0;
 
 export interface IrrigationRequest {
   actorUserId: string;
@@ -25,14 +24,15 @@ export class IrrigationCommandService {
       throw new Error("durationSec must be an integer from 1 to 900");
     }
 
+    const commandId = createDomainId("irrigation");
     const command: IrrigationCommand = {
-      id: `irrigation-${++commandCounter}`,
+      id: commandId,
       actorUserId: input.actorUserId,
       deviceId: input.deviceId,
       durationSec: input.durationSec,
       status: "queued",
       requestedAt: new Date(),
-      commandTopic: `devices/${input.deviceId}/commands/irrigation/irrigation-${commandCounter}`
+      commandTopic: `devices/${input.deviceId}/commands/irrigation/${commandId}`
     };
     this.store.irrigationCommands.set(command.id, command);
     this.audit.record({
@@ -101,6 +101,22 @@ export class IrrigationCommandService {
         });
       }
     }
+  }
+
+  markFailed(commandId: string, deviceId: string, reason: string): IrrigationCommand {
+    const command = this.requireCommand(commandId, deviceId);
+    command.status = "failed";
+    command.completedAt = new Date();
+    command.failureReason = reason;
+    const device = this.access.requireDevice(deviceId);
+    device.irrigationState = "off";
+    this.audit.record({
+      actorUserId: command.actorUserId,
+      action: "irrigation.failed",
+      deviceId,
+      metadata: { commandId, reason }
+    });
+    return command;
   }
 
   private requireCommand(commandId: string, deviceId: string): IrrigationCommand {

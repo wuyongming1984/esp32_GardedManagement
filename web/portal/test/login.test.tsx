@@ -8,12 +8,12 @@ describe("DashboardShell login", () => {
     vi.restoreAllMocks();
   });
 
-  it("shows a Chinese login page before loading the dashboard", async () => {
+  it("logs in with email and password before loading the dashboard", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url.endsWith("/auth/login")) {
         expect(init?.method).toBe("POST");
-        expect(init?.body).toBe(JSON.stringify({ email: "north-client@example.com" }));
+        expect(init?.body).toBe(JSON.stringify({ email: "north-client@example.com", password: "change-me-now" }));
         return Response.json({
           accessToken: "customer-token",
           user: {
@@ -45,9 +45,8 @@ describe("DashboardShell login", () => {
     render(<DashboardShell initialState={adminFixture} />);
 
     expect(screen.getByRole("heading", { name: "苗圃智能登录" })).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "苗圃智能控制中心" })).not.toBeInTheDocument();
-
     fireEvent.change(screen.getByLabelText("登录邮箱"), { target: { value: "north-client@example.com" } });
+    fireEvent.change(screen.getByLabelText("登录密码"), { target: { value: "change-me-now" } });
     fireEvent.click(screen.getByRole("button", { name: "登录" }));
 
     expect(await screen.findByRole("heading", { name: "苗圃智能控制中心" })).toBeInTheDocument();

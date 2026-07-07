@@ -9,11 +9,14 @@ export type IrrigationCommandStatus =
   | "failed"
   | "timed_out";
 export type VideoMode = "webrtc" | "mjpeg";
+export type ActorScope = "user" | "share";
+export type IrrigationScheduleType = "one_time" | "daily";
 
 export interface User {
   id: string;
   email: string;
   name: string;
+  passwordHash: string;
   role: UserRole;
   customerId?: string;
 }
@@ -56,6 +59,32 @@ export interface IrrigationCommand {
   commandTopic: string;
 }
 
+export interface CustomerShareLink {
+  id: string;
+  customerId: string;
+  tokenHash: string;
+  createdByUserId: string;
+  createdAt: Date;
+  expiresAt: Date;
+  revokedAt?: Date;
+}
+
+export interface IrrigationSchedule {
+  id: string;
+  actorUserId: string;
+  deviceId: string;
+  type: IrrigationScheduleType;
+  durationSec: number;
+  timezone: "Asia/Shanghai";
+  runAt?: Date;
+  timeOfDay?: string;
+  nextRunAt: Date;
+  enabled: boolean;
+  lastRunAt?: Date;
+  failureReason?: string;
+  createdAt: Date;
+}
+
 export interface VideoSession {
   id: string;
   actorUserId: string;
@@ -87,7 +116,9 @@ export interface NurseryStore {
   devices: Map<string, Device>;
   assignments: Map<string, DeviceAssignment>;
   irrigationCommands: Map<string, IrrigationCommand>;
+  irrigationSchedules: Map<string, IrrigationSchedule>;
   videoSessions: Map<string, VideoSession>;
+  shareLinks: Map<string, CustomerShareLink>;
   latestMjpegFrames: Map<string, MjpegFrame>;
   auditLogs: AuditLog[];
 }

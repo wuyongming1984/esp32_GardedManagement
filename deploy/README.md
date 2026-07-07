@@ -177,6 +177,7 @@ POSTGRES_DB=nursery
 DATABASE_URL=postgresql://nursery:change-to-a-strong-password@postgres:5432/nursery
 
 JWT_SECRET=change-to-a-long-random-string
+ADMIN_INITIAL_PASSWORD=change-this-before-first-login
 MQTT_URL=mqtt://emqx:1883
 MQTT_USERNAME=
 MQTT_PASSWORD=
@@ -191,6 +192,8 @@ PUBLIC_APP_URL=http://your-server-public-ip
 - `.env` 只放在服务器本地，不要提交到 GitHub。
 - `POSTGRES_PASSWORD` 和 `DATABASE_URL` 里的数据库密码必须一致。
 - `JWT_SECRET` 和 `TURN_SECRET` 必须使用长随机字符串。
+- `ADMIN_INITIAL_PASSWORD` 是初始管理员密码。上线后使用 `admin@nursery.local` 登录，并立刻在“账号设置”里修改密码。
+- `PUBLIC_APP_URL` 必须填写用户访问后台的真实地址，否则后台生成的客户链接会指向错误地址。
 
 保存 nano：
 
@@ -205,6 +208,8 @@ cd ~/esp32_GardedManagement/deploy
 docker compose up -d --build
 docker compose ps
 ```
+
+API 容器启动时会自动执行 `prisma db push` 创建或更新 PostgreSQL 表结构，然后再启动后台服务。客户、设备、设备分配、客户链接、定时浇灌和审计记录会同步到 PostgreSQL，容器或服务器重启后会从数据库恢复。
 
 查看日志：
 
@@ -276,6 +281,8 @@ cd deploy
 docker compose up -d --build
 docker compose ps
 ```
+
+更新后如果浏览器仍显示旧页面，先强制刷新页面，必要时清理浏览器缓存后重新打开。
 
 ## 10. 停止和重启
 

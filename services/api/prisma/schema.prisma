@@ -32,6 +32,11 @@ enum VideoMode {
   mjpeg
 }
 
+enum IrrigationScheduleType {
+  one_time
+  daily
+}
+
 model User {
   id           String     @id @default(cuid())
   email        String     @unique
@@ -50,6 +55,7 @@ model Customer {
   contactEmail String
   users       User[]
   assignments DeviceAssignment[]
+  shareLinks  CustomerShareLink[]
   createdAt   DateTime           @default(now())
 }
 
@@ -57,13 +63,18 @@ model Device {
   id                  String                @id
   displayName         String
   location            String
-  deviceSecretHash    String
+  deviceSecretHash    String                @default("provision-later")
   status              DeviceStatus          @default(offline)
   irrigationState     String                @default("off")
+  irrigationRemainingSec Int?
   lastSeenAt          DateTime?
+  mjpegStreamUrl       String?
+  mqttStatusTopic      String
+  mqttEventsTopic      String
   assignments         DeviceAssignment[]
   videoSessions       VideoSession[]
   irrigationCommands  IrrigationCommand[]
+  irrigationSchedules  IrrigationSchedule[]
   auditLogs           AuditLog[]
   createdAt           DateTime              @default(now())
 }
@@ -103,6 +114,34 @@ model IrrigationCommand {
   completedAt   DateTime?
   failureReason String?
   device        Device                   @relation(fields: [deviceId], references: [id])
+}
+
+model IrrigationSchedule {
+  id            String                 @id @default(cuid())
+  actorUserId   String
+  deviceId      String
+  type          IrrigationScheduleType
+  durationSec   Int
+  timezone      String                 @default("Asia/Shanghai")
+  runAt         DateTime?
+  timeOfDay     String?
+  nextRunAt     DateTime
+  enabled       Boolean                @default(true)
+  lastRunAt     DateTime?
+  failureReason String?
+  device        Device                 @relation(fields: [deviceId], references: [id])
+  createdAt     DateTime               @default(now())
+}
+
+model CustomerShareLink {
+  id              String    @id @default(cuid())
+  customerId      String
+  tokenHash       String    @unique
+  createdByUserId String
+  expiresAt       DateTime
+  revokedAt       DateTime?
+  customer        Customer  @relation(fields: [customerId], references: [id])
+  createdAt       DateTime  @default(now())
 }
 
 model AuditLog {

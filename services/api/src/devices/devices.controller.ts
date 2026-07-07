@@ -14,7 +14,7 @@ import {
   StreamableFile
 } from "@nestjs/common";
 import { appState } from "../app-state.js";
-import { actorFromAuthorizationHeader } from "../auth/auth.controller.js";
+import { actorContextFromAuthorizationHeader, actorFromAuthorizationHeader } from "../auth/auth.controller.js";
 import { publishIrrigationCommand } from "../mqtt/mqtt.service.js";
 import { IrrigationCommand } from "../domain/types.js";
 
@@ -23,6 +23,7 @@ export function ensureIrrigationCommandPublished(
   publish: (command: IrrigationCommand) => boolean = publishIrrigationCommand
 ): IrrigationCommand {
   if (!publish(command)) {
+    appState.irrigation.markFailed(command.id, command.deviceId, "MQTT broker is not connected; irrigation command was not sent to device");
     throw new ServiceUnavailableException("MQTT broker is not connected; irrigation command was not sent to device");
   }
   return command;
@@ -47,7 +48,7 @@ function mapDomainError(error: unknown): never {
 export class DevicesController {
   @Get("devices")
   list(@Headers("authorization") authorization?: string) {
-    return appState.devices.listForUser(actorFromAuthorizationHeader(authorization));
+    return appState.devices.listForUser(actorContextFromAuthorizationHeader(authorization).userId);
   }
 
   @Get("devices/:id")
@@ -114,12 +115,68 @@ export class DevicesController {
     @Headers("authorization") authorization?: string
   ) {
     try {
+      const actor = actorContextFromAuthorizationHeader(authorization);
+      if (actor.scope === "share") {
+        throw new ForbiddenException("Share links are read-only");
+      }
       const command = appState.irrigation.request({
-        actorUserId: actorFromAuthorizationHeader(authorization),
+        actorUserId: actor.userId,
         deviceId: id,
         durationSec: body.durationSec
       });
       return ensureIrrigationCommandPublished(command);
+    } catch (error) {
+      mapDomainError(error);
+    }
+  }
+
+  @Get("devices/:id/irrigation-schedules")
+  listSchedules(@Param("id") id: string, @Headers("authorization") authorization?: string) {
+    try {
+      return appState.schedules.listForDevice(actorFromAuthorizationHeader(authorization), id);
+    } catch (error) {
+      mapDomainError(error);
+    }
+  }
+
+  @Post("devices/:id/irrigation-schedules")
+  createSchedule(
+    @Param("id") id: string,
+    @Body()
+    body: {
+      type: "one_time" | "daily";
+      durationSec: number;
+      runAt?: string;
+      timeOfDay?: string;
+    },
+    @Headers("authorization") authorization?: string
+  ) {
+    try {
+      const actor = actorContextFromAuthorizationHeader(authorization);
+      if (actor.scope === "share") {
+        throw new ForbiddenException("Share links are read-only");
+      }
+      return appState.schedules.create({
+        actorUserId: actor.userId,
+        deviceId: id,
+        type: body.type,
+        durationSec: body.durationSec,
+        runAt: body.runAt,
+        timeOfDay: body.timeOfDay
+      });
+    } catch (error) {
+      mapDomainError(error);
+    }
+  }
+
+  @Delete("irrigation-schedules/:id")
+  deleteSchedule(@Param("id") id: string, @Headers("authorization") authorization?: string) {
+    try {
+      const actor = actorContextFromAuthorizationHeader(authorization);
+      if (actor.scope === "share") {
+        throw new ForbiddenException("Share links are read-only");
+      }
+      return appState.schedules.delete(actor.userId, id);
     } catch (error) {
       mapDomainError(error);
     }

@@ -4,10 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "prebuild": "prisma generate --schema prisma/schema.prisma",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/main.js",
     "dev": "tsx watch src/main.ts",
     "test": "vitest run",
+    "prelint": "prisma generate --schema prisma/schema.prisma",
     "lint": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
