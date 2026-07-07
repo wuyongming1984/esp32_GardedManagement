@@ -1,10 +1,16 @@
-import { ForbiddenException, NotFoundException, ServiceUnavailableException, StreamableFile } from "@nestjs/common";
+import { ForbiddenException, NotFoundException, ServiceUnavailableException, StreamableFile, UnauthorizedException } from "@nestjs/common";
 import jwt from "jsonwebtoken";
 import { describe, expect, it } from "vitest";
 import { appState } from "../src/app-state.js";
 import { DevicesController, ensureIrrigationCommandPublished } from "../src/devices/devices.controller.js";
 
 describe("DevicesController", () => {
+  it("requires authorization before listing devices", () => {
+    const controller = new DevicesController();
+
+    expect(() => controller.list()).toThrow(UnauthorizedException);
+  });
+
   it("maps customer access to an unassigned device to a forbidden response", () => {
     const controller = new DevicesController();
     const customerToken = jwt.sign({ sub: "user-customer-north", role: "customer" }, "dev-only-change-me");

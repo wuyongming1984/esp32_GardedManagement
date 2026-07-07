@@ -24,11 +24,18 @@ function publicUser(userId: string) {
 
 export function actorFromAuthorizationHeader(authorization?: string): string {
   if (!authorization) {
-    return "user-admin";
+    throw new UnauthorizedException("Missing authorization token");
   }
-  const token = authorization.replace(/^Bearer\s+/i, "");
-  const decoded = jwt.verify(token, jwtSecret) as { sub: string };
-  return decoded.sub;
+  const token = authorization.replace(/^Bearer\s+/i, "").trim();
+  if (!token) {
+    throw new UnauthorizedException("Missing authorization token");
+  }
+  try {
+    const decoded = jwt.verify(token, jwtSecret) as { sub: string };
+    return decoded.sub;
+  } catch {
+    throw new UnauthorizedException("Invalid authorization token");
+  }
 }
 
 @Controller()

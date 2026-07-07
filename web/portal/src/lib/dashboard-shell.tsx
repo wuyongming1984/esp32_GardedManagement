@@ -1,11 +1,13 @@
 "use client";
 
-import { Camera, Droplets, Leaf, Plus, RefreshCw, Shield, Wifi, WifiOff } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { PortalDevice, PortalState } from "./types";
+import { Camera, Droplets, Leaf, LogIn, Plus, RefreshCw, Shield, Wifi, WifiOff } from "lucide-react";
+import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { PortalDevice, PortalState, PortalUser } from "./types";
 
 interface DashboardShellProps {
   initialState: PortalState;
+  initialToken?: string;
+  autoRefresh?: boolean;
 }
 
 interface ApiDevice {
@@ -25,8 +27,13 @@ interface ApiVideoSession {
   mjpegUrl?: string;
 }
 
+interface ApiLoginResponse {
+  accessToken: string;
+  user: PortalUser;
+}
+
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:3001";
-const ADMIN_EMAIL = process.env.NEXT_PUBLIC_DEMO_ADMIN_EMAIL ?? "admin@nursery.local";
+const DEFAULT_LOGIN_EMAIL = process.env.NEXT_PUBLIC_DEMO_ADMIN_EMAIL ?? "admin@nursery.local";
 
 export function resolvePreviewUrl(value?: string | null, token?: string | null) {
   if (!value) {
@@ -100,7 +107,7 @@ function DeviceRow({
   onRefresh: () => Promise<void>;
 }) {
   const [previewOpen, setPreviewOpen] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(resolvePreviewUrl(device.mjpegStreamUrl));
+  const [previewUrl, setPreviewUrl] = useState<string | null>(resolvePreviewUrl(device.mjpegStreamUrl, token));
   const [previewFrameSeq, setPreviewFrameSeq] = useState(0);
   const [videoMessage, setVideoMessage] = useState("尚未打开预览");
   const [durationSec, setDurationSec] = useState(5);
@@ -282,10 +289,13 @@ function DeviceRow({
   );
 }
 
-export function DashboardShell({ initialState }: DashboardShellProps) {
+export function DashboardShell({ initialState, initialToken, autoRefresh = true }: DashboardShellProps) {
   const [state, setState] = useState(initialState);
-  const [token, setToken] = useState<string | null>(null);
-  const [statusMessage, setStatusMessage] = useState("正在连接本机后台...");
+  const [token, setToken] = useState<string | null>(initialToken ?? null);
+  const [statusMessage, setStatusMessage] = useState(initialToken ? "已登录，正在读取设备状态..." : "请先登录后台");
+  const [loginEmail, setLoginEmail] = useState(DEFAULT_LOGIN_EMAIL);
+  const [loginMessage, setLoginMessage] = useState("请输入平台管理员或客户账号邮箱");
+  const [loginBusy, setLoginBusy] = useState(false);
   const isAdmin = state.user.role === "platform_admin";
 
   const refreshDevices = useCallback(async () => {
@@ -312,42 +322,54 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
         ...current.audit.slice(0, 4)
       ]
     }));
-    setStatusMessage("已连接本机后台，设备状态为实时数据");
+    setStatusMessage("已连接后台，设备状态为实时数据");
   }, [token]);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function login() {
-      try {
-        const response = await fetch(`${API_BASE}/auth/login`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ email: ADMIN_EMAIL })
-        });
-        if (!response.ok) {
-          throw new Error(`后台登录失败：${response.status}`);
-        }
-        const body = await response.json();
-        if (!cancelled) {
-          setToken(body.accessToken);
-          setStatusMessage("后台登录成功，正在读取设备状态...");
-        }
-      } catch (error) {
-        if (!cancelled) {
-          setStatusMessage(error instanceof Error ? error.message : "后台登录失败");
-        }
-      }
+  async function submitLogin(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const email = loginEmail.trim();
+    if (!email) {
+      setLoginMessage("请输入登录邮箱");
+      return;
     }
 
-    void login();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    setLoginBusy(true);
+    setLoginMessage("正在登录...");
+    try {
+      const response = await fetch(`${API_BASE}/auth/login`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email })
+      });
+      if (!response.ok) {
+        throw new Error(response.status === 401 ? "账号不存在，请检查邮箱" : `登录失败：${response.status}`);
+      }
+      const body = (await response.json()) as ApiLoginResponse;
+      setState((current) => ({
+        ...current,
+        user: body.user,
+        devices: [],
+        audit: [
+          {
+            id: `login-${Date.now()}`,
+            label: "登录成功，正在读取设备状态",
+            time: new Date().toLocaleTimeString("zh-CN")
+          },
+          ...current.audit.slice(0, 4)
+        ]
+      }));
+      setToken(body.accessToken);
+      setStatusMessage("登录成功，正在读取设备状态...");
+      setLoginMessage("登录成功");
+    } catch (error) {
+      setLoginMessage(error instanceof Error ? error.message : "登录失败");
+    } finally {
+      setLoginBusy(false);
+    }
+  }
 
   useEffect(() => {
-    if (!token) {
+    if (!token || !autoRefresh) {
       return;
     }
     void refreshDevices().catch((error) => setStatusMessage(error instanceof Error ? error.message : "设备刷新失败"));
@@ -355,12 +377,49 @@ export function DashboardShell({ initialState }: DashboardShellProps) {
       void refreshDevices().catch((error) => setStatusMessage(error instanceof Error ? error.message : "设备刷新失败"));
     }, 1000);
     return () => window.clearInterval(timer);
-  }, [refreshDevices, token]);
+  }, [autoRefresh, refreshDevices, token]);
 
   const onlineCount = useMemo(
     () => state.devices.filter((device) => device.status === "online").length,
     [state.devices]
   );
+
+  if (!token) {
+    return (
+      <main className="login-shell">
+        <section className="login-panel" aria-label="登录">
+          <div className="brand login-brand">
+            <div className="brand-mark">
+              <Leaf size={22} />
+            </div>
+            <div>
+              <strong>苗圃智能</strong>
+              <span>ESP32-P4 设备群</span>
+            </div>
+          </div>
+          <h1>苗圃智能登录</h1>
+          <p>请输入平台管理员或客户账号邮箱，登录后查看设备、实时预览和浇灌状态。</p>
+          <form className="login-form" onSubmit={submitLogin}>
+            <label htmlFor="login-email">登录邮箱</label>
+            <input
+              id="login-email"
+              type="email"
+              value={loginEmail}
+              onChange={(event) => setLoginEmail(event.target.value)}
+              autoComplete="username"
+              placeholder="admin@nursery.local"
+            />
+            <button type="submit" className="icon-button primary" disabled={loginBusy}>
+              <LogIn size={17} />
+              {loginBusy ? "登录中..." : "登录"}
+            </button>
+          </form>
+          <p className="login-hint">管理员：admin@nursery.local；客户：north-client@example.com</p>
+          <p className="login-message" role="status">{loginMessage}</p>
+        </section>
+      </main>
+    );
+  }
 
   return (
     <main className="app-shell">

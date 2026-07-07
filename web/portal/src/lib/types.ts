@@ -4,8 +4,10 @@ export type IrrigationState = "on" | "off";
 
 export interface PortalUser {
   id: string;
+  email?: string;
   name: string;
   role: UserRole;
+  customerId?: string;
 }
 
 export interface PortalDevice {

@@ -29,6 +29,66 @@ select {
   font: inherit;
 }
 
+.login-shell {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 28px;
+  background:
+    linear-gradient(135deg, rgba(49, 122, 87, 0.08), rgba(255, 255, 255, 0.76)),
+    var(--bg);
+}
+
+.login-panel {
+  width: min(440px, 100%);
+  padding: 28px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+
+.login-brand {
+  margin-bottom: 22px;
+}
+
+.login-panel h1 {
+  margin-bottom: 10px;
+}
+
+.login-form {
+  display: grid;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.login-form label {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.login-form input {
+  min-height: 42px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.login-form button {
+  justify-content: center;
+  margin-top: 6px;
+}
+
+.login-hint,
+.login-message {
+  margin-top: 14px;
+  font-size: 13px;
+}
+
+.login-message {
+  color: var(--accent-strong);
+}
+
 .app-shell {
   display: grid;
   grid-template-columns: 248px minmax(0, 1fr);
