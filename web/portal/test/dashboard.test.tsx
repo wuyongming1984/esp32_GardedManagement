@@ -93,6 +93,34 @@ describe("DashboardShell device management", () => {
     expect(await screen.findByDisplayValue("http://8.153.162.62/share/token-1")).toBeInTheDocument();
   });
 
+  it("generates and shows a customer share link from the device list toolbar", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.endsWith("/api/admin/share-links")) {
+          expect(JSON.parse(String(init?.body))).toEqual({
+            customerId: "customer-north",
+            deviceId: "device-north-01"
+          });
+          return Response.json({
+            id: "share-1",
+            customerId: "customer-north",
+            deviceId: "device-north-01",
+            url: "http://8.153.162.62/share/token-1"
+          });
+        }
+        throw new Error(`Unexpected fetch ${url}`);
+      })
+    );
+
+    render(<DashboardShell initialState={adminFixture} initialToken="test-token" autoRefresh={false} />);
+    fireEvent.click(screen.getByRole("button", { name: "生成客户链接" }));
+
+    expect(await screen.findByDisplayValue("http://8.153.162.62/share/token-1")).toBeInTheDocument();
+    expect(screen.getByText("当前链接设备：device-north-01")).toBeInTheDocument();
+  });
+
   it("exchanges a customer share token and allows managing only that linked device", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);

@@ -350,6 +350,8 @@ export function DashboardShell({ initialState, initialToken, initialShareToken, 
     if (response.ok) {
       const body = (await response.json()) as { url: string };
       setShareUrl(body.url);
+      setActionMessage("客户链接已生成");
+      setActiveView("links");
     } else {
       setActionMessage("客户链接生成失败");
     }
@@ -434,7 +436,7 @@ export function DashboardShell({ initialState, initialToken, initialShareToken, 
               <div><h2>设备管理</h2><p>{statusMessage}</p></div>
               <div className="panel-actions">
                 {isAdmin ? (
-                  <button type="button" className="icon-button" onClick={() => setActiveView("links")}>
+                  <button type="button" className="icon-button" onClick={() => void createShareLink()}>
                     <LinkIcon size={17} />生成客户链接
                   </button>
                 ) : null}
@@ -480,6 +482,7 @@ export function DashboardShell({ initialState, initialToken, initialShareToken, 
 
         {activeView === "links" && isAdmin ? (
           <section className="panel compact-panel">
+            {selectedDevice ? <p className="action-message">当前链接设备：{selectedDevice.id}</p> : null}
             <h2>客户链接</h2>
             <p>生成客户专属链接后，客户打开链接只能查看自己分配的设备和实时预览。</p>
             <button type="button" className="icon-button primary" onClick={createShareLink}><LinkIcon size={17} />生成客户链接</button>
