@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DashboardShell, appendPreviewFrameParam, resolvePreviewUrl } from "../src/lib/dashboard-shell";
 import { adminFixture, customerFixture } from "../src/lib/fixtures";
@@ -68,10 +68,19 @@ describe("DashboardShell device management", () => {
   it("generates a customer share link from the customer link page", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
         if (url.endsWith("/api/admin/share-links")) {
-          return Response.json({ id: "share-1", customerId: "customer-north", url: "http://8.153.162.62/share/token-1" });
+          expect(JSON.parse(String(init?.body))).toEqual({
+            customerId: "customer-north",
+            deviceId: "device-north-01"
+          });
+          return Response.json({
+            id: "share-1",
+            customerId: "customer-north",
+            deviceId: "device-north-01",
+            url: "http://8.153.162.62/share/token-1"
+          });
         }
         throw new Error(`Unexpected fetch ${url}`);
       })
@@ -84,25 +93,34 @@ describe("DashboardShell device management", () => {
     expect(await screen.findByDisplayValue("http://8.153.162.62/share/token-1")).toBeInTheDocument();
   });
 
-  it("exchanges a customer share token and keeps the portal read-only", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
-        const url = String(input);
-        if (url.endsWith("/auth/share-links/share-token/exchange")) {
-          return Response.json({ accessToken: "share-access-token", user: customerFixture.user });
-        }
-        if (url.endsWith("/api/devices")) {
-          return Response.json(customerFixture.devices);
-        }
-        throw new Error(`Unexpected fetch ${url}`);
-      })
-    );
+  it("exchanges a customer share token and allows managing only that linked device", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/auth/share-links/share-token/exchange")) {
+        return Response.json({ accessToken: "share-access-token", user: customerFixture.user });
+      }
+      if (url.endsWith("/api/devices")) {
+        return Response.json([customerFixture.devices[0]]);
+      }
+      if (url.endsWith("/api/devices/device-north-01/irrigation-commands")) {
+        expect(JSON.parse(String(init?.body))).toEqual({ durationSec: 60 });
+        return Response.json({ id: "command-1", deviceId: "device-north-01", durationSec: 60, status: "queued" });
+      }
+      throw new Error(`Unexpected fetch ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
 
     render(<DashboardShell initialState={adminFixture} initialShareToken="share-token" />);
 
-    expect(await screen.findByText("客户链接只读视图")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "下发限时浇灌" })).not.toBeInTheDocument();
+    const irrigateButton = await screen.findByRole("button", { name: "下发限时浇灌" });
+    fireEvent.click(irrigateButton);
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/devices/device-north-01/irrigation-commands",
+        expect.objectContaining({ method: "POST" })
+      )
+    );
     expect(screen.queryByRole("link", { name: "账号设置" })).not.toBeInTheDocument();
   });
 });

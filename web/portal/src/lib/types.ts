@@ -21,6 +21,7 @@ export interface PortalDevice {
   lastSeenLabel: string;
   mjpegStreamUrl?: string;
   videoMode: "webrtc" | "mjpeg";
+  customerId?: string;
   customerName?: string;
   nextScheduleLabel?: string;
 }

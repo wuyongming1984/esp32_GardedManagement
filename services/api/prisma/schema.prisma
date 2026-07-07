@@ -75,6 +75,7 @@ model Device {
   videoSessions       VideoSession[]
   irrigationCommands  IrrigationCommand[]
   irrigationSchedules  IrrigationSchedule[]
+  shareLinks          CustomerShareLink[]
   auditLogs           AuditLog[]
   createdAt           DateTime              @default(now())
 }
@@ -136,11 +137,13 @@ model IrrigationSchedule {
 model CustomerShareLink {
   id              String    @id @default(cuid())
   customerId      String
+  deviceId        String?
   tokenHash       String    @unique
   createdByUserId String
   expiresAt       DateTime
   revokedAt       DateTime?
   customer        Customer  @relation(fields: [customerId], references: [id])
+  device          Device?   @relation(fields: [deviceId], references: [id])
   createdAt       DateTime  @default(now())
 }
 

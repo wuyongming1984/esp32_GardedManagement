@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Headers, Param, Patch, Post, Query, UnauthorizedException } from "@nestjs/common";
 import { appState } from "../app-state.js";
 import { actorFromAuthorizationHeader } from "../auth/auth.controller.js";
-import { DeviceStatus } from "../domain/types.js";
+import { Device, DeviceStatus } from "../domain/types.js";
 
 function requireAdmin(authorization?: string) {
   const userId = actorFromAuthorizationHeader(authorization);
@@ -10,6 +10,16 @@ function requireAdmin(authorization?: string) {
     throw new UnauthorizedException("Platform admin role required");
   }
   return userId;
+}
+
+function withAssignmentDetails(device: Device) {
+  const assignment = Array.from(appState.store.assignments.values()).find((candidate) => candidate.deviceId === device.id);
+  const customer = assignment ? appState.store.customers.get(assignment.customerId) : undefined;
+  return {
+    ...device,
+    customerId: assignment?.customerId,
+    customerName: customer?.name
+  };
 }
 
 @Controller("admin")
@@ -59,7 +69,7 @@ export class AdminController {
     });
     const start = (page - 1) * pageSize;
     return {
-      items: filtered.slice(start, start + pageSize),
+      items: filtered.slice(start, start + pageSize).map(withAssignmentDetails),
       total: filtered.length,
       page,
       pageSize
@@ -140,13 +150,11 @@ export class AdminController {
   }
 
   @Post("share-links")
-  createShareLink(
-    @Body() body: { customerId: string },
-    @Headers("authorization") authorization?: string
-  ) {
+  createShareLink(@Body() body: { customerId: string; deviceId: string }, @Headers("authorization") authorization?: string) {
     return appState.shareLinks.create({
       actorUserId: requireAdmin(authorization),
-      customerId: body.customerId
+      customerId: body.customerId,
+      deviceId: body.deviceId
     });
   }
 

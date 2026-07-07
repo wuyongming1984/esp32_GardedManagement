@@ -62,6 +62,7 @@ export interface IrrigationCommand {
 export interface CustomerShareLink {
   id: string;
   customerId: string;
+  deviceId: string;
   tokenHash: string;
   createdByUserId: string;
   createdAt: Date;

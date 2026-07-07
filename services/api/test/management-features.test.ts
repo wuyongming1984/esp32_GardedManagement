@@ -1,4 +1,4 @@
-import { ForbiddenException, UnauthorizedException } from "@nestjs/common";
+import { ForbiddenException, ServiceUnavailableException, UnauthorizedException } from "@nestjs/common";
 import jwt from "jsonwebtoken";
 import { describe, expect, it } from "vitest";
 import { AdminController } from "../src/admin/admin.controller.js";
@@ -71,22 +71,44 @@ describe("admin share links and device paging", () => {
     expect(page.items.every((device) => device.status === "online")).toBe(true);
   });
 
-  it("generates revocable customer share links that exchange into read-only access", () => {
+  it("generates revocable device share links that can manage only the selected device", () => {
     const admin = new AdminController();
     const auth = new AuthController();
 
-    const link = admin.createShareLink({ customerId: "customer-north" }, adminAuth);
+    const link = admin.createShareLink({ customerId: "customer-north", deviceId: "device-north-01" }, adminAuth);
     expect(link.url).toMatch(/\/share\//);
+    expect(link.deviceId).toBe("device-north-01");
 
     const token = link.url.split("/share/")[1];
     const exchanged = auth.exchangeShareLink(token);
     const context = actorContextFromAuthorizationHeader(`Bearer ${exchanged.accessToken}`);
     expect(context.scope).toBe("share");
+    expect(context.deviceId).toBe("device-north-01");
 
     const devices = new DevicesController();
     expect(devices.list(`Bearer ${exchanged.accessToken}`).map((device) => device.id)).toEqual(["device-north-01"]);
     expect(() =>
+      devices.irrigate("device-south-01", { durationSec: 10 }, `Bearer ${exchanged.accessToken}`)
+    ).toThrow(ForbiddenException);
+
+    const commandCount = appState.store.irrigationCommands.size;
+    expect(() =>
       devices.irrigate("device-north-01", { durationSec: 10 }, `Bearer ${exchanged.accessToken}`)
+    ).toThrow(ServiceUnavailableException);
+    expect(appState.store.irrigationCommands.size).toBe(commandCount + 1);
+
+    const schedule = devices.createSchedule(
+      "device-north-01",
+      { type: "one_time", durationSec: 10, runAt: "2026-07-08T00:00:00.000Z" },
+      `Bearer ${exchanged.accessToken}`
+    );
+    expect(schedule.deviceId).toBe("device-north-01");
+    expect(() =>
+      devices.createSchedule(
+        "device-south-01",
+        { type: "one_time", durationSec: 10, runAt: "2026-07-08T00:00:00.000Z" },
+        `Bearer ${exchanged.accessToken}`
+      )
     ).toThrow(ForbiddenException);
 
     admin.revokeShareLink(link.id, adminAuth);

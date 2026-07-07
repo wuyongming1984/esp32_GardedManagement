@@ -34,6 +34,7 @@ interface ApiDevice extends Partial<PortalDevice> {
   irrigationRemainingSec?: number;
   lastSeenAt?: string;
   mjpegStreamUrl?: string;
+  customerId?: string;
 }
 
 interface ApiLoginResponse {
@@ -118,6 +119,7 @@ function mapApiDevice(device: ApiDevice): PortalDevice {
     lastSeenLabel: device.lastSeenLabel ?? formatLastSeen(device.lastSeenAt),
     mjpegStreamUrl: device.mjpegStreamUrl,
     videoMode: device.videoMode ?? "mjpeg",
+    customerId: device.customerId,
     customerName: device.customerName,
     nextScheduleLabel: device.nextScheduleLabel
   };
@@ -139,7 +141,7 @@ function asDevicePage(payload: unknown): { items: ApiDevice[]; total: number; pa
 export function DashboardShell({ initialState, initialToken, initialShareToken, autoRefresh = true }: DashboardShellProps) {
   const [state, setState] = useState(initialState);
   const [token, setToken] = useState<string | null>(initialToken ?? null);
-  const [readOnly, setReadOnly] = useState(false);
+  const [shareMode, setShareMode] = useState(false);
   const [activeView, setActiveView] = useState<ActiveView>("devices");
   const [statusMessage, setStatusMessage] = useState(initialToken ? "已登录，正在读取设备状态..." : "请先登录后台");
   const [loginEmail, setLoginEmail] = useState(DEFAULT_LOGIN_EMAIL);
@@ -161,7 +163,7 @@ export function DashboardShell({ initialState, initialToken, initialShareToken, 
   const [previewFrameSeq, setPreviewFrameSeq] = useState(0);
   const [accountName, setAccountName] = useState(initialState.user.name);
   const [accountEmail, setAccountEmail] = useState(initialState.user.email ?? "");
-  const isAdmin = state.user.role === "platform_admin" && !readOnly;
+  const isAdmin = state.user.role === "platform_admin" && !shareMode;
   const selectedDevice = state.devices.find((device) => device.id === selectedDeviceId) ?? state.devices[0];
 
   const filteredDevices = useMemo(() => {
@@ -198,8 +200,8 @@ export function DashboardShell({ initialState, initialToken, initialShareToken, 
     if (page.items[0] && !page.items.some((device) => device.id === selectedDeviceId)) {
       setSelectedDeviceId(page.items[0].id);
     }
-    setStatusMessage(readOnly ? "客户链接只读模式：仅可查看设备和实时预览" : "已连接后台，设备状态为实时数据");
-  }, [isAdmin, readOnly, search, selectedDeviceId, token]);
+    setStatusMessage(shareMode ? "客户链接管理模式：仅可管理此设备" : "已连接后台，设备状态为实时数据");
+  }, [isAdmin, search, selectedDeviceId, shareMode, token]);
 
   useEffect(() => {
     if (!initialShareToken) return;
@@ -210,10 +212,10 @@ export function DashboardShell({ initialState, initialToken, initialShareToken, 
         if (!response.ok) throw new Error(`客户链接失效：${response.status}`);
         const body = (await response.json()) as ApiLoginResponse;
         if (!cancelled) {
-          setReadOnly(true);
+          setShareMode(true);
           setToken(body.accessToken);
           setState((current) => ({ ...current, user: body.user, devices: [] }));
-          setStatusMessage("客户链接只读模式：仅可查看设备和实时预览");
+          setStatusMessage("客户链接管理模式：仅可管理此设备");
         }
       } catch (error) {
         if (!cancelled) setLoginMessage(error instanceof Error ? error.message : "客户链接打开失败");
@@ -253,7 +255,7 @@ export function DashboardShell({ initialState, initialToken, initialShareToken, 
       if (!response.ok) throw new Error(response.status === 401 ? "账号或密码错误" : `登录失败：${response.status}`);
       const body = (await response.json()) as ApiLoginResponse;
       setToken(body.accessToken);
-      setReadOnly(false);
+      setShareMode(false);
       setState((current) => ({
         ...current,
         user: body.user,
@@ -291,7 +293,7 @@ export function DashboardShell({ initialState, initialToken, initialShareToken, 
   }
 
   async function createSchedule(type: "one_time" | "daily") {
-    if (!token || !selectedDevice || readOnly) return;
+    if (!token || !selectedDevice) return;
     const body =
       type === "one_time"
         ? { type, runAt: new Date(oneTimeRunAt).toISOString(), durationSec: Number(oneTimeDuration) }
@@ -311,7 +313,7 @@ export function DashboardShell({ initialState, initialToken, initialShareToken, 
   }
 
   async function startIrrigation() {
-    if (!token || !selectedDevice || readOnly) return;
+    if (!token || !selectedDevice) return;
     const response = await fetch(apiUrl(`/api/devices/${selectedDevice.id}/irrigation-commands`), {
       method: "POST",
       headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
@@ -338,11 +340,12 @@ export function DashboardShell({ initialState, initialToken, initialShareToken, 
   }
 
   async function createShareLink() {
-    if (!token || !isAdmin) return;
+    if (!token || !isAdmin || !selectedDevice) return;
+    const customerId = selectedDevice.customerId ?? state.user.customerId ?? "customer-north";
     const response = await fetch(apiUrl("/api/admin/share-links"), {
       method: "POST",
       headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-      body: JSON.stringify({ customerId: state.user.customerId ?? "customer-north" })
+      body: JSON.stringify({ customerId, deviceId: selectedDevice.id })
     });
     if (response.ok) {
       const body = (await response.json()) as { url: string };
@@ -400,7 +403,7 @@ export function DashboardShell({ initialState, initialToken, initialShareToken, 
           <a className={activeView === "devices" ? "active" : ""} href="#devices" onClick={(e) => { e.preventDefault(); setActiveView("devices"); }}>设备</a>
           <a className={activeView === "schedules" ? "active" : ""} href="#schedules" onClick={(e) => { e.preventDefault(); setActiveView("schedules"); }}>定时浇灌</a>
           {isAdmin ? <a className={activeView === "links" ? "active" : ""} href="#links" onClick={(e) => { e.preventDefault(); setActiveView("links"); }}>客户链接</a> : null}
-          {!readOnly ? <a className={activeView === "account" ? "active" : ""} href="#account" onClick={(e) => { e.preventDefault(); setActiveView("account"); }}>账号设置</a> : null}
+          {!shareMode ? <a className={activeView === "account" ? "active" : ""} href="#account" onClick={(e) => { e.preventDefault(); setActiveView("account"); }}>账号设置</a> : null}
           <a className={activeView === "audit" ? "active" : ""} href="#audit" onClick={(e) => { e.preventDefault(); setActiveView("audit"); }}>审计</a>
         </nav>
         <div className="sidebar-status">
@@ -414,7 +417,7 @@ export function DashboardShell({ initialState, initialToken, initialShareToken, 
         <header className="topbar">
           <div>
             <h1>苗圃智能控制中心</h1>
-            <p>{readOnly ? "客户链接只读视图" : isAdmin ? "平台管理员视图" : "客户设备视图"}</p>
+            <p>{shareMode ? "客户设备管理视图" : isAdmin ? "平台管理员视图" : "客户设备视图"}</p>
           </div>
           <div className="user-pill"><Shield size={16} />{state.user.name}</div>
         </header>
@@ -488,7 +491,7 @@ export function DashboardShell({ initialState, initialToken, initialShareToken, 
           </section>
         ) : null}
 
-        {activeView === "account" && !readOnly ? (
+        {activeView === "account" && !shareMode ? (
           <section className="panel compact-panel">
             <h2>账号设置</h2>
             <label className="full-field"><span>姓名</span><input value={accountName} onChange={(event) => setAccountName(event.target.value)} /></label>
@@ -523,11 +526,10 @@ export function DashboardShell({ initialState, initialToken, initialShareToken, 
           <section className="drawer-section">
             <h3>浇灌控制</h3>
             <p>当前状态：{irrigationStateLabel(selectedDevice.irrigationState)}</p>
-            {!readOnly ? <button type="button" className="icon-button primary" onClick={startIrrigation}><Droplets size={17} />下发限时浇灌</button> : null}
+            <button type="button" className="icon-button primary" onClick={startIrrigation}><Droplets size={17} />下发限时浇灌</button>
           </section>
 
-          {!readOnly ? (
-            <>
+          <>
               <section className="drawer-section">
                 <h3>一次性浇灌</h3>
                 <label className="full-field"><span>一次预约时间</span><input type="datetime-local" value={oneTimeRunAt} onChange={(event) => setOneTimeRunAt(event.target.value)} /></label>
@@ -540,8 +542,7 @@ export function DashboardShell({ initialState, initialToken, initialShareToken, 
                 <label className="full-field"><span>每日浇灌秒数</span><input type="number" min={1} max={900} value={dailyDuration} onChange={(event) => setDailyDuration(Number(event.target.value))} /></label>
                 <button type="button" className="icon-button primary" onClick={() => void createSchedule("daily")}><CalendarClock size={17} />创建每日定时</button>
               </section>
-            </>
-          ) : null}
+          </>
           {scheduleMessages.map((message, index) => (
             <p className="action-message" key={`${message}-${index}`}>{message}</p>
           ))}

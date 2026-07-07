@@ -13,7 +13,7 @@ export class ShareLinkService {
     this.audit = new AuditService(store);
   }
 
-  create(input: { actorUserId: string; customerId: string; baseUrl?: string }): CustomerShareLink & { token: string; url: string } {
+  create(input: { actorUserId: string; customerId: string; deviceId: string; baseUrl?: string }): CustomerShareLink & { token: string; url: string } {
     const actor = this.access.requireUser(input.actorUserId);
     if (actor.role !== "platform_admin") {
       throw new Error("Platform admin role required");
@@ -21,12 +21,20 @@ export class ShareLinkService {
     if (!this.store.customers.has(input.customerId)) {
       throw new Error("Customer not found");
     }
+    this.access.requireDevice(input.deviceId);
+    const assigned = Array.from(this.store.assignments.values()).some(
+      (assignment) => assignment.customerId === input.customerId && assignment.deviceId === input.deviceId
+    );
+    if (!assigned) {
+      throw new Error("Device is not assigned to this customer");
+    }
 
     const token = createOpaqueToken();
     const now = new Date();
     const link: CustomerShareLink = {
       id: createDomainId("share"),
       customerId: input.customerId,
+      deviceId: input.deviceId,
       tokenHash: hashOpaqueToken(token),
       createdByUserId: input.actorUserId,
       createdAt: now,
@@ -36,7 +44,7 @@ export class ShareLinkService {
     this.audit.record({
       actorUserId: input.actorUserId,
       action: "share_link.created",
-      metadata: { shareLinkId: link.id, customerId: input.customerId }
+      metadata: { shareLinkId: link.id, customerId: input.customerId, deviceId: input.deviceId }
     });
     const baseUrl = input.baseUrl ?? process.env.PUBLIC_APP_URL ?? "http://127.0.0.1:3003";
     return { ...link, token, url: `${baseUrl.replace(/\/$/, "")}/share/${token}` };
@@ -63,7 +71,7 @@ export class ShareLinkService {
     this.audit.record({
       actorUserId,
       action: "share_link.revoked",
-      metadata: { shareLinkId, customerId: link.customerId }
+      metadata: { shareLinkId, customerId: link.customerId, deviceId: link.deviceId }
     });
     return link;
   }
@@ -71,7 +79,7 @@ export class ShareLinkService {
   exchange(token: string): CustomerShareLink {
     const tokenHash = hashOpaqueToken(token);
     const link = Array.from(this.store.shareLinks.values()).find((candidate) => candidate.tokenHash === tokenHash);
-    if (!link || link.revokedAt || link.expiresAt.getTime() <= Date.now()) {
+    if (!link || !link.deviceId || link.revokedAt || link.expiresAt.getTime() <= Date.now()) {
       throw new Error("Share link is invalid or expired");
     }
     return link;

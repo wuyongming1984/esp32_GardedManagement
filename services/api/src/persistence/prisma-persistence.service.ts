@@ -178,6 +178,7 @@ export class PrismaPersistenceService implements OnModuleInit, OnModuleDestroy {
         {
           id: link.id,
           customerId: link.customerId,
+          deviceId: link.deviceId ?? "",
           tokenHash: link.tokenHash,
           createdByUserId: link.createdByUserId,
           createdAt: link.createdAt,
@@ -316,6 +317,7 @@ export class PrismaPersistenceService implements OnModuleInit, OnModuleDestroy {
           where: { id: link.id },
           create: link,
           update: {
+            deviceId: link.deviceId,
             expiresAt: link.expiresAt,
             revokedAt: link.revokedAt
           }

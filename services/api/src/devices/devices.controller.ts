@@ -14,7 +14,7 @@ import {
   StreamableFile
 } from "@nestjs/common";
 import { appState } from "../app-state.js";
-import { actorContextFromAuthorizationHeader, actorFromAuthorizationHeader } from "../auth/auth.controller.js";
+import { ActorContext, actorContextFromAuthorizationHeader, actorFromAuthorizationHeader } from "../auth/auth.controller.js";
 import { publishIrrigationCommand } from "../mqtt/mqtt.service.js";
 import { IrrigationCommand } from "../domain/types.js";
 
@@ -44,17 +44,35 @@ function mapDomainError(error: unknown): never {
   throw error;
 }
 
+function assertShareCanUseDevice(actor: ActorContext, deviceId: string): void {
+  if (actor.scope !== "share") {
+    return;
+  }
+  if (!actor.deviceId || actor.deviceId !== deviceId) {
+    throw new ForbiddenException("Share link does not allow this device");
+  }
+}
+
 @Controller()
 export class DevicesController {
   @Get("devices")
   list(@Headers("authorization") authorization?: string) {
-    return appState.devices.listForUser(actorContextFromAuthorizationHeader(authorization).userId);
+    const actor = actorContextFromAuthorizationHeader(authorization);
+    if (actor.scope === "share") {
+      if (!actor.deviceId) {
+        throw new ForbiddenException("Share link does not allow this device");
+      }
+      return [appState.devices.getForUser(actor.userId, actor.deviceId)];
+    }
+    return appState.devices.listForUser(actor.userId);
   }
 
   @Get("devices/:id")
   get(@Param("id") id: string, @Headers("authorization") authorization?: string) {
     try {
-      return appState.devices.getForUser(actorFromAuthorizationHeader(authorization), id);
+      const actor = actorContextFromAuthorizationHeader(authorization);
+      assertShareCanUseDevice(actor, id);
+      return appState.devices.getForUser(actor.userId, id);
     } catch (error) {
       mapDomainError(error);
     }
@@ -67,8 +85,10 @@ export class DevicesController {
     @Headers("authorization") authorization?: string
   ) {
     try {
+      const actor = actorContextFromAuthorizationHeader(authorization);
+      assertShareCanUseDevice(actor, id);
       return appState.video.open({
-        actorUserId: actorFromAuthorizationHeader(authorization),
+        actorUserId: actor.userId,
         deviceId: id,
         preferredMode: body.preferredMode
       });
@@ -94,7 +114,9 @@ export class DevicesController {
   ) {
     try {
       const effectiveAuthorization = authorization ?? (token ? `Bearer ${token}` : undefined);
-      appState.devices.getForUser(actorFromAuthorizationHeader(effectiveAuthorization), id);
+      const actor = actorContextFromAuthorizationHeader(effectiveAuthorization);
+      assertShareCanUseDevice(actor, id);
+      appState.devices.getForUser(actor.userId, id);
       const frame = appState.store.latestMjpegFrames.get(id);
       if (!frame) {
         throw new NotFoundException("Latest MJPEG frame not found");
@@ -116,9 +138,7 @@ export class DevicesController {
   ) {
     try {
       const actor = actorContextFromAuthorizationHeader(authorization);
-      if (actor.scope === "share") {
-        throw new ForbiddenException("Share links are read-only");
-      }
+      assertShareCanUseDevice(actor, id);
       const command = appState.irrigation.request({
         actorUserId: actor.userId,
         deviceId: id,
@@ -133,7 +153,9 @@ export class DevicesController {
   @Get("devices/:id/irrigation-schedules")
   listSchedules(@Param("id") id: string, @Headers("authorization") authorization?: string) {
     try {
-      return appState.schedules.listForDevice(actorFromAuthorizationHeader(authorization), id);
+      const actor = actorContextFromAuthorizationHeader(authorization);
+      assertShareCanUseDevice(actor, id);
+      return appState.schedules.listForDevice(actor.userId, id);
     } catch (error) {
       mapDomainError(error);
     }
@@ -153,9 +175,7 @@ export class DevicesController {
   ) {
     try {
       const actor = actorContextFromAuthorizationHeader(authorization);
-      if (actor.scope === "share") {
-        throw new ForbiddenException("Share links are read-only");
-      }
+      assertShareCanUseDevice(actor, id);
       return appState.schedules.create({
         actorUserId: actor.userId,
         deviceId: id,
@@ -173,8 +193,9 @@ export class DevicesController {
   deleteSchedule(@Param("id") id: string, @Headers("authorization") authorization?: string) {
     try {
       const actor = actorContextFromAuthorizationHeader(authorization);
-      if (actor.scope === "share") {
-        throw new ForbiddenException("Share links are read-only");
+      const schedule = appState.store.irrigationSchedules.get(id);
+      if (schedule) {
+        assertShareCanUseDevice(actor, schedule.deviceId);
       }
       return appState.schedules.delete(actor.userId, id);
     } catch (error) {

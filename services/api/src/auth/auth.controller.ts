@@ -10,10 +10,11 @@ interface LoginBody {
   password: string;
 }
 
-interface ActorContext {
+export interface ActorContext {
   userId: string;
   scope: ActorScope;
   customerId?: string;
+  deviceId?: string;
 }
 
 function publicUser(userId: string) {
@@ -43,11 +44,12 @@ export function actorContextFromAuthorizationHeader(authorization?: string): Act
     throw new UnauthorizedException("Missing authorization token");
   }
   try {
-    const decoded = jwt.verify(token, jwtSecret) as { sub: string; scope?: ActorScope; customerId?: string };
+    const decoded = jwt.verify(token, jwtSecret) as { sub: string; scope?: ActorScope; customerId?: string; deviceId?: string };
     return {
       userId: decoded.sub,
       scope: decoded.scope ?? "user",
-      customerId: decoded.customerId
+      customerId: decoded.customerId,
+      deviceId: decoded.deviceId
     };
   } catch {
     throw new UnauthorizedException("Invalid authorization token");
@@ -78,7 +80,7 @@ export class AuthController {
       }
       return {
         accessToken: jwt.sign(
-          { sub: user.id, role: user.role, scope: "share", customerId: link.customerId },
+          { sub: user.id, role: user.role, scope: "share", customerId: link.customerId, deviceId: link.deviceId },
           jwtSecret,
           { expiresIn: "12h" }
         ),
