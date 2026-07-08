@@ -44,6 +44,7 @@ function sanitizePlotCard(input: Partial<PlotCard>, index: number): PlotCard {
     id,
     deviceId,
     title: input.title?.trim() || device?.location || device?.displayName || `未命名地块 ${index + 1}`,
+    subtitle: input.subtitle?.trim() || undefined,
     xPct: clampNumber(input.xPct, 0, 94, 6 + (index % 3) * 30),
     yPct: clampNumber(input.yPct, 0, 94, 10 + Math.floor(index / 3) * 28),
     widthPct: clampNumber(input.widthPct, 12, 80, 24),

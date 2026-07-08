@@ -169,6 +169,7 @@ function defaultPlotLayout(index: number, device?: PortalDevice): PortalDeviceLa
     id: device ? `plot-${device.id}` : `plot-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     deviceId: device?.id,
     title: device?.location || device?.displayName || `未命名地块 ${index + 1}`,
+    subtitle: device?.displayName || "等待绑定开发板",
     xPct: 6 + column * 30,
     yPct: 10 + row * 28,
     widthPct: 24,
@@ -237,6 +238,7 @@ export function DashboardShell({ initialState, initialToken, initialShareToken, 
   const [accountEmail, setAccountEmail] = useState(initialState.user.email ?? "");
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const deviceLayoutsRef = useRef(deviceLayouts);
+  const layoutMetadataSaveTimerRef = useRef<number | null>(null);
   const isAdmin = state.user.role === "platform_admin" && !shareMode;
   const devicesById = useMemo(() => new Map(state.devices.map((device) => [device.id, device])), [state.devices]);
   const selectedLayout = useMemo(
@@ -274,7 +276,7 @@ export function DashboardShell({ initialState, initialToken, initialShareToken, 
             return filteredDevices.some((device) => device.id === item.device?.id);
           }
           const value = search.trim().toLowerCase();
-          return statusFilter === "all" && (!value || [item.layout.id, item.layout.title].some((field) => field.toLowerCase().includes(value)));
+          return statusFilter === "all" && (!value || [item.layout.id, item.layout.title, item.layout.subtitle ?? ""].some((field) => field.toLowerCase().includes(value)));
         })
         .sort((a, b) => a.layout.zIndex - b.layout.zIndex),
     [deviceLayouts, devicesById, filteredDevices, search, statusFilter]
@@ -342,6 +344,25 @@ export function DashboardShell({ initialState, initialToken, initialShareToken, 
     replaceDeviceLayouts(next);
     return next;
   }, [replaceDeviceLayouts, state.devices]);
+
+  const scheduleLayoutMetadataSave = useCallback(() => {
+    if (layoutMetadataSaveTimerRef.current) {
+      window.clearTimeout(layoutMetadataSaveTimerRef.current);
+    }
+    layoutMetadataSaveTimerRef.current = window.setTimeout(() => {
+      layoutMetadataSaveTimerRef.current = null;
+      void persistLayouts(deviceLayoutsRef.current);
+    }, 120);
+  }, [persistLayouts]);
+
+  const updateSelectedLayoutText = useCallback(
+    (field: "title" | "subtitle", value: string) => {
+      if (!isAdmin || !selectedLayout) return;
+      updateSingleLayout(selectedLayout.id, (layout) => ({ ...layout, [field]: value }));
+      scheduleLayoutMetadataSave();
+    },
+    [isAdmin, scheduleLayoutMetadataSave, selectedLayout, updateSingleLayout]
+  );
 
   const rebindSelectedLayout = useCallback((event: ChangeEvent<HTMLSelectElement>) => {
     const nextDeviceId = event.target.value || undefined;
@@ -510,6 +531,12 @@ export function DashboardShell({ initialState, initialToken, initialShareToken, 
     const timer = window.setInterval(() => setPreviewFrameSeq((value) => value + 1), 1000);
     return () => window.clearInterval(timer);
   }, [previewOpen]);
+
+  useEffect(() => () => {
+    if (layoutMetadataSaveTimerRef.current) {
+      window.clearTimeout(layoutMetadataSaveTimerRef.current);
+    }
+  }, []);
 
   async function submitLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -887,7 +914,7 @@ export function DashboardShell({ initialState, initialToken, initialShareToken, 
                     {editLayout ? <Move size={15} className="field-card-move" /> : null}
                   </div>
                   <strong>{layout.title}</strong>
-                  <span>{device?.displayName ?? "等待绑定开发板"}</span>
+                  <span>{layout.subtitle || device?.displayName || "等待绑定开发板"}</span>
                   <small>{device?.id ?? "无设备"}</small>
                   {device ? (
                     <div className="field-card-meta">
@@ -972,6 +999,19 @@ export function DashboardShell({ initialState, initialToken, initialShareToken, 
               </>
             )}
           </div>
+          {selectedLayout && editLayout && isAdmin ? (
+            <section className="drawer-section">
+              <h3>地块信息</h3>
+              <label className="full-field">
+                <span>地块名称</span>
+                <input value={selectedLayout.title} onChange={(event) => updateSelectedLayoutText("title", event.target.value)} />
+              </label>
+              <label className="full-field">
+                <span>地块说明</span>
+                <input value={selectedLayout.subtitle ?? ""} onChange={(event) => updateSelectedLayoutText("subtitle", event.target.value)} />
+              </label>
+            </section>
+          ) : null}
           {selectedDevice ? (
             <>
               <div className="preview-frame drawer-preview">

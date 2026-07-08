@@ -213,6 +213,44 @@ describe("DashboardShell device management", () => {
     expect(screen.queryByRole("button", { name: "创建一次预约" })).not.toBeInTheDocument();
   });
 
+  it("edits selected plot card name and description while autosaving", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/api/admin/device-layouts") && (!init?.method || init.method === "GET")) {
+        return Response.json({
+          items: [plotNorth({ id: "plot-empty", deviceId: undefined, title: "Empty bed", subtitle: "Waiting for board binding" })]
+        });
+      }
+      if (url.endsWith("/api/admin/device-layouts") && init?.method === "PUT") {
+        const body = JSON.parse(String(init.body)) as { items: Array<{ id: string; title: string; subtitle?: string }> };
+        expect(body.items).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ id: "plot-empty", title: "育苗观察区", subtitle: "南侧补光试验" })
+          ])
+        );
+        return Response.json(body);
+      }
+      throw new Error(`Unexpected fetch ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<DashboardShell initialState={adminFixture} initialToken="test-token" autoRefresh={false} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /查看地块 Empty bed/ }));
+    fireEvent.click(screen.getByRole("button", { name: "编辑布局" }));
+    fireEvent.change(screen.getByLabelText("地块名称"), { target: { value: "育苗观察区" } });
+    fireEvent.change(screen.getByLabelText("地块说明"), { target: { value: "南侧补光试验" } });
+
+    await waitFor(() => expect(screen.getAllByText("育苗观察区").length).toBeGreaterThan(0));
+    expect(screen.getAllByText("南侧补光试验").length).toBeGreaterThan(0);
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/admin/device-layouts",
+        expect.objectContaining({ method: "PUT" })
+      )
+    );
+  });
+
   it("deletes the selected plot card and releases its device for another plot", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);

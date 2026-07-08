@@ -97,6 +97,7 @@ model DeviceLayout {
 model PlotCard {
   id        String   @id @default(cuid())
   title     String
+  subtitle  String?
   deviceId  String?  @unique
   xPct      Float
   yPct      Float

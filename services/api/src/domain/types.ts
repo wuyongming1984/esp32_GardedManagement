@@ -60,6 +60,7 @@ export interface DeviceLayout {
 export interface PlotCard {
   id: string;
   title: string;
+  subtitle?: string;
   deviceId?: string;
   xPct: number;
   yPct: number;

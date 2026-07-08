@@ -137,6 +137,7 @@ export class PrismaPersistenceService implements OnModuleInit, OnModuleDestroy {
     const loadedPlotCards = plotCards as Array<{
       id: string;
       title: string;
+      subtitle: string | null;
       deviceId: string | null;
       xPct: number;
       yPct: number;
@@ -151,6 +152,7 @@ export class PrismaPersistenceService implements OnModuleInit, OnModuleDestroy {
         : deviceLayouts.map((layout) => ({
             id: `plot-${layout.deviceId}`,
             title: layout.title,
+            subtitle: null,
             deviceId: layout.deviceId,
             xPct: layout.xPct,
             yPct: layout.yPct,
@@ -166,6 +168,7 @@ export class PrismaPersistenceService implements OnModuleInit, OnModuleDestroy {
           {
             id: layout.id,
             title: layout.title,
+            subtitle: layout.subtitle ?? undefined,
             deviceId: layout.deviceId ?? undefined,
             xPct: layout.xPct,
             yPct: layout.yPct,
@@ -351,6 +354,7 @@ export class PrismaPersistenceService implements OnModuleInit, OnModuleDestroy {
             create: {
               id: layout.id,
               title: layout.title,
+              subtitle: layout.subtitle,
               deviceId: layout.deviceId,
               xPct: layout.xPct,
               yPct: layout.yPct,
@@ -360,6 +364,7 @@ export class PrismaPersistenceService implements OnModuleInit, OnModuleDestroy {
             },
             update: {
               title: layout.title,
+              subtitle: layout.subtitle,
               deviceId: layout.deviceId,
               xPct: layout.xPct,
               yPct: layout.yPct,

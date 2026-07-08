@@ -126,6 +126,7 @@ describe("admin share links and device paging", () => {
           {
             id: "plot-empty-1",
             title: "Empty bed",
+            subtitle: "Waiting for board binding",
             xPct: 4,
             yPct: 8,
             widthPct: 20,
@@ -152,6 +153,7 @@ describe("admin share links and device paging", () => {
       id: "plot-empty-1",
       deviceId: undefined,
       title: "Empty bed",
+      subtitle: "Waiting for board binding",
       xPct: 4,
       yPct: 8,
       widthPct: 20,
@@ -170,7 +172,7 @@ describe("admin share links and device paging", () => {
     });
     expect(controller.deviceLayouts(adminAuth).items).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ id: "plot-empty-1", deviceId: undefined }),
+        expect.objectContaining({ id: "plot-empty-1", deviceId: undefined, subtitle: "Waiting for board binding" }),
         expect.objectContaining({ id: "plot-north", deviceId: "device-north-01", xPct: 13.5, zIndex: 7 })
       ])
     );
