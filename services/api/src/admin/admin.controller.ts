@@ -1,7 +1,7 @@
 import { BadRequestException, Body, Controller, Get, Headers, Param, Patch, Post, Put, Query, UnauthorizedException } from "@nestjs/common";
 import { appState } from "../app-state.js";
 import { actorFromAuthorizationHeader } from "../auth/auth.controller.js";
-import { Device, DeviceLayout, DeviceStatus } from "../domain/types.js";
+import { Device, DeviceStatus, PlotCard } from "../domain/types.js";
 
 function requireAdmin(authorization?: string) {
   const userId = actorFromAuthorizationHeader(authorization);
@@ -30,14 +30,20 @@ function clampNumber(value: unknown, min: number, max: number, fallback: number)
   return Math.min(max, Math.max(min, parsed));
 }
 
-function sanitizeLayout(input: Partial<DeviceLayout>, index: number): DeviceLayout {
-  if (!input.deviceId || !appState.store.devices.has(input.deviceId)) {
-    throw new BadRequestException("Device layout deviceId is invalid");
+function sanitizePlotCard(input: Partial<PlotCard>, index: number): PlotCard {
+  const id = input.id?.trim();
+  if (!id) {
+    throw new BadRequestException("Plot card id is required");
   }
-  const device = appState.store.devices.get(input.deviceId)!;
+  const deviceId = input.deviceId?.trim() || undefined;
+  if (deviceId && !appState.store.devices.has(deviceId)) {
+    throw new BadRequestException("Plot card deviceId is invalid");
+  }
+  const device = deviceId ? appState.store.devices.get(deviceId) : undefined;
   return {
-    deviceId: input.deviceId,
-    title: input.title?.trim() || device.location || device.displayName,
+    id,
+    deviceId,
+    title: input.title?.trim() || device?.location || device?.displayName || `未命名地块 ${index + 1}`,
     xPct: clampNumber(input.xPct, 0, 94, 6 + (index % 3) * 30),
     yPct: clampNumber(input.yPct, 0, 94, 10 + Math.floor(index / 3) * 28),
     widthPct: clampNumber(input.widthPct, 12, 80, 24),
@@ -48,7 +54,7 @@ function sanitizeLayout(input: Partial<DeviceLayout>, index: number): DeviceLayo
 }
 
 function listDeviceLayouts() {
-  return Array.from(appState.store.deviceLayouts.values()).sort((a, b) => a.zIndex - b.zIndex);
+  return Array.from(appState.store.plotCards.values()).sort((a, b) => a.zIndex - b.zIndex);
 }
 
 @Controller("admin")
@@ -181,22 +187,31 @@ export class AdminController {
 
   @Put("device-layouts")
   saveDeviceLayouts(
-    @Body() body: { items?: Array<Partial<DeviceLayout>> },
+    @Body() body: { items?: Array<Partial<PlotCard>> },
     @Headers("authorization") authorization?: string
   ) {
     requireAdmin(authorization);
     const items = body.items ?? [];
+    const seenIds = new Set<string>();
     const seenDeviceIds = new Set<string>();
     for (const item of items) {
-      if (item.deviceId && seenDeviceIds.has(item.deviceId)) {
-        throw new BadRequestException("Device layout deviceId must be unique");
+      const id = item.id?.trim();
+      if (id && seenIds.has(id)) {
+        throw new BadRequestException("Plot card id must be unique");
       }
-      if (item.deviceId) {
-        seenDeviceIds.add(item.deviceId);
+      if (id) {
+        seenIds.add(id);
+      }
+      const deviceId = item.deviceId?.trim();
+      if (deviceId && seenDeviceIds.has(deviceId)) {
+        throw new BadRequestException("Plot card deviceId must be unique");
+      }
+      if (deviceId) {
+        seenDeviceIds.add(deviceId);
       }
     }
-    const saved = items.map((item, index) => sanitizeLayout(item, index));
-    appState.store.deviceLayouts = new Map(saved.map((layout) => [layout.deviceId, layout]));
+    const saved = items.map((item, index) => sanitizePlotCard(item, index));
+    appState.store.plotCards = new Map(saved.map((layout) => [layout.id, layout]));
     return { items: saved };
   }
 

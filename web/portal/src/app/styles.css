@@ -492,6 +492,11 @@ button.filter-chip {
   background: rgba(255, 252, 247, 0.94);
 }
 
+.field-card.unbound {
+  border-color: rgba(89, 111, 98, 0.24);
+  background: rgba(248, 250, 246, 0.96);
+}
+
 .field-map.editing .field-card {
   cursor: grab;
 }
@@ -697,6 +702,10 @@ button.filter-chip {
 
 .status.offline {
   color: var(--warning);
+}
+
+.status.unbound {
+  color: var(--muted);
 }
 
 .status.fault {

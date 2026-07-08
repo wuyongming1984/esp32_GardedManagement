@@ -57,6 +57,18 @@ export interface DeviceLayout {
   updatedAt?: Date;
 }
 
+export interface PlotCard {
+  id: string;
+  title: string;
+  deviceId?: string;
+  xPct: number;
+  yPct: number;
+  widthPct: number;
+  heightPct: number;
+  zIndex: number;
+  updatedAt?: Date;
+}
+
 export interface IrrigationCommand {
   id: string;
   actorUserId: string;
@@ -127,6 +139,7 @@ export interface NurseryStore {
   customers: Map<string, Customer>;
   devices: Map<string, Device>;
   deviceLayouts: Map<string, DeviceLayout>;
+  plotCards: Map<string, PlotCard>;
   assignments: Map<string, DeviceAssignment>;
   irrigationCommands: Map<string, IrrigationCommand>;
   irrigationSchedules: Map<string, IrrigationSchedule>;

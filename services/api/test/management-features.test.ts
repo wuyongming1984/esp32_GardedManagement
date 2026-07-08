@@ -115,7 +115,7 @@ describe("admin share links and device paging", () => {
     expect(() => auth.exchangeShareLink(token)).toThrow(UnauthorizedException);
   });
 
-  it("stores freeform device card layouts for platform admins only", () => {
+  it("stores freeform plot cards for platform admins only", () => {
     const controller = new AdminController();
 
     expect(() => controller.deviceLayouts(customerAuth)).toThrow(UnauthorizedException);
@@ -124,6 +124,16 @@ describe("admin share links and device paging", () => {
       {
         items: [
           {
+            id: "plot-empty-1",
+            title: "Empty bed",
+            xPct: 4,
+            yPct: 8,
+            widthPct: 20,
+            heightPct: 18,
+            zIndex: 1
+          },
+          {
+            id: "plot-north",
             deviceId: "device-north-01",
             title: "North irregular bed",
             xPct: 13.5,
@@ -137,8 +147,19 @@ describe("admin share links and device paging", () => {
       adminAuth
     );
 
-    expect(saved.items).toHaveLength(1);
+    expect(saved.items).toHaveLength(2);
     expect(saved.items[0]).toMatchObject({
+      id: "plot-empty-1",
+      deviceId: undefined,
+      title: "Empty bed",
+      xPct: 4,
+      yPct: 8,
+      widthPct: 20,
+      heightPct: 18,
+      zIndex: 1
+    });
+    expect(saved.items[1]).toMatchObject({
+      id: "plot-north",
       deviceId: "device-north-01",
       title: "North irregular bed",
       xPct: 13.5,
@@ -148,17 +169,21 @@ describe("admin share links and device paging", () => {
       zIndex: 7
     });
     expect(controller.deviceLayouts(adminAuth).items).toEqual(
-      expect.arrayContaining([expect.objectContaining({ deviceId: "device-north-01", xPct: 13.5, zIndex: 7 })])
+      expect.arrayContaining([
+        expect.objectContaining({ id: "plot-empty-1", deviceId: undefined }),
+        expect.objectContaining({ id: "plot-north", deviceId: "device-north-01", xPct: 13.5, zIndex: 7 })
+      ])
     );
   });
 
-  it("replaces the saved device card layout collection and removes omitted cards", () => {
+  it("replaces the saved plot card collection and removes omitted cards", () => {
     const controller = new AdminController();
 
     controller.saveDeviceLayouts(
       {
         items: [
           {
+            id: "plot-north",
             deviceId: "device-north-01",
             title: "North card",
             xPct: 10,
@@ -168,6 +193,7 @@ describe("admin share links and device paging", () => {
             zIndex: 1
           },
           {
+            id: "plot-empty",
             deviceId: "device-south-01",
             title: "South card",
             xPct: 40,
@@ -185,6 +211,7 @@ describe("admin share links and device paging", () => {
       {
         items: [
           {
+            id: "plot-north",
             deviceId: "device-north-01",
             title: "North card retained",
             xPct: 14,
@@ -200,7 +227,7 @@ describe("admin share links and device paging", () => {
 
     expect(saved.items).toHaveLength(1);
     expect(controller.deviceLayouts(adminAuth).items).toEqual([
-      expect.objectContaining({ deviceId: "device-north-01", title: "North card retained" })
+      expect.objectContaining({ id: "plot-north", deviceId: "device-north-01", title: "North card retained" })
     ]);
   });
 
@@ -211,8 +238,8 @@ describe("admin share links and device paging", () => {
       controller.saveDeviceLayouts(
         {
           items: [
-            { deviceId: "device-north-01", title: "A", xPct: 10, yPct: 10, widthPct: 24, heightPct: 20, zIndex: 1 },
-            { deviceId: "device-north-01", title: "B", xPct: 30, yPct: 10, widthPct: 24, heightPct: 20, zIndex: 2 }
+            { id: "plot-a", deviceId: "device-north-01", title: "A", xPct: 10, yPct: 10, widthPct: 24, heightPct: 20, zIndex: 1 },
+            { id: "plot-b", deviceId: "device-north-01", title: "B", xPct: 30, yPct: 10, widthPct: 24, heightPct: 20, zIndex: 2 }
           ]
         },
         adminAuth

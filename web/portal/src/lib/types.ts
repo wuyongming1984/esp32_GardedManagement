@@ -27,8 +27,9 @@ export interface PortalDevice {
 }
 
 export interface PortalDeviceLayout {
-  deviceId: string;
+  id: string;
   title: string;
+  deviceId?: string;
   xPct: number;
   yPct: number;
   widthPct: number;

@@ -72,6 +72,7 @@ model Device {
   mqttStatusTopic      String
   mqttEventsTopic      String
   layout              DeviceLayout?
+  plotCard            PlotCard?
   assignments         DeviceAssignment[]
   videoSessions       VideoSession[]
   irrigationCommands  IrrigationCommand[]
@@ -91,6 +92,19 @@ model DeviceLayout {
   zIndex    Int
   updatedAt DateTime @updatedAt
   device    Device   @relation(fields: [deviceId], references: [id])
+}
+
+model PlotCard {
+  id        String   @id @default(cuid())
+  title     String
+  deviceId  String?  @unique
+  xPct      Float
+  yPct      Float
+  widthPct  Float
+  heightPct Float
+  zIndex    Int
+  updatedAt DateTime @updatedAt
+  device    Device?  @relation(fields: [deviceId], references: [id])
 }
 
 model DeviceAssignment {

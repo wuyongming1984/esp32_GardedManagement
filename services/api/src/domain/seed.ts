@@ -11,6 +11,7 @@ export function createEmptyStore(): NurseryStore {
     customers: new Map(),
     devices: new Map(),
     deviceLayouts: new Map(),
+    plotCards: new Map(),
     assignments: new Map(),
     irrigationCommands: new Map(),
     irrigationSchedules: new Map(),
@@ -81,7 +82,29 @@ export function createSeededNurseryDomain() {
     zIndex: 2,
     updatedAt: new Date("2026-07-06T00:00:00.000Z")
   });
+  store.plotCards.set("plot-device-north-01", {
+    id: "plot-device-north-01",
+    deviceId: "device-north-01",
+    title: "北区温室 A 苗床",
+    xPct: 9,
+    yPct: 12,
+    widthPct: 30,
+    heightPct: 24,
+    zIndex: 2,
+    updatedAt: new Date("2026-07-06T00:00:00.000Z")
+  });
   store.deviceLayouts.set("device-south-01", {
+    deviceId: "device-south-01",
+    title: "南区育苗台",
+    xPct: 52,
+    yPct: 38,
+    widthPct: 28,
+    heightPct: 22,
+    zIndex: 1,
+    updatedAt: new Date("2026-07-06T00:00:00.000Z")
+  });
+  store.plotCards.set("plot-device-south-01", {
+    id: "plot-device-south-01",
     deviceId: "device-south-01",
     title: "南区育苗台",
     xPct: 52,

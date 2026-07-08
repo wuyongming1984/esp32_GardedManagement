@@ -61,7 +61,7 @@ interface ApiDeviceLayout extends PortalDeviceLayout {
 }
 
 interface LayoutDragState {
-  deviceId: string;
+  layoutId: string;
   mode: "move" | "resize";
   startX: number;
   startY: number;
@@ -162,12 +162,13 @@ function clampPercent(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
-function defaultDeviceLayout(device: PortalDevice, index: number): PortalDeviceLayout {
+function defaultPlotLayout(index: number, device?: PortalDevice): PortalDeviceLayout {
   const column = index % 3;
   const row = Math.floor(index / 3);
   return {
-    deviceId: device.id,
-    title: device.location || device.displayName,
+    id: device ? `plot-${device.id}` : `plot-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    deviceId: device?.id,
+    title: device?.location || device?.displayName || `未命名地块 ${index + 1}`,
     xPct: 6 + column * 30,
     yPct: 10 + row * 28,
     widthPct: 24,
@@ -178,12 +179,19 @@ function defaultDeviceLayout(device: PortalDevice, index: number): PortalDeviceL
 
 function normalizeDeviceLayouts(devices: PortalDevice[], layouts: PortalDeviceLayout[] = []) {
   const deviceIds = new Set(devices.map((device) => device.id));
+  const seenIds = new Set<string>();
   const seenDeviceIds = new Set<string>();
   return layouts.filter((layout) => {
-    if (!deviceIds.has(layout.deviceId) || seenDeviceIds.has(layout.deviceId)) {
+    if (!layout.id || seenIds.has(layout.id)) {
       return false;
     }
-    seenDeviceIds.add(layout.deviceId);
+    seenIds.add(layout.id);
+    if (layout.deviceId) {
+      if (!deviceIds.has(layout.deviceId) || seenDeviceIds.has(layout.deviceId)) {
+        return false;
+      }
+      seenDeviceIds.add(layout.deviceId);
+    }
     return true;
   });
 }
@@ -213,8 +221,7 @@ export function DashboardShell({ initialState, initialToken, initialShareToken, 
   const [loginMessage, setLoginMessage] = useState("请输入平台管理员或客户账号邮箱和密码");
   const [loginBusy, setLoginBusy] = useState(false);
   const [search, setSearch] = useState("");
-  const [selectedDeviceId, setSelectedDeviceId] = useState(initialState.devices[0]?.id ?? "");
-  const [addDeviceId, setAddDeviceId] = useState("");
+  const [selectedPlotId, setSelectedPlotId] = useState(initialState.deviceLayouts?.[0]?.id ?? "");
   const [totalDevices, setTotalDevices] = useState(initialState.devices.length);
   const [shareUrl, setShareUrl] = useState("");
   const [actionMessage, setActionMessage] = useState("");
@@ -231,7 +238,18 @@ export function DashboardShell({ initialState, initialToken, initialShareToken, 
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const deviceLayoutsRef = useRef(deviceLayouts);
   const isAdmin = state.user.role === "platform_admin" && !shareMode;
-  const selectedDevice = state.devices.find((device) => device.id === selectedDeviceId) ?? state.devices[0];
+  const devicesById = useMemo(() => new Map(state.devices.map((device) => [device.id, device])), [state.devices]);
+  const selectedLayout = useMemo(
+    () => deviceLayouts.find((layout) => layout.id === selectedPlotId) ?? deviceLayouts[0],
+    [deviceLayouts, selectedPlotId]
+  );
+  const selectedDevice = shareMode
+    ? state.devices[0]
+    : selectedLayout?.deviceId
+      ? devicesById.get(selectedLayout.deviceId)
+      : selectedLayout
+        ? undefined
+        : state.devices[0];
 
   const filteredDevices = useMemo(() => {
     const value = search.trim().toLowerCase();
@@ -243,26 +261,31 @@ export function DashboardShell({ initialState, initialToken, initialShareToken, 
 
   const onlineCount = useMemo(() => state.devices.filter((device) => device.status === "online").length, [state.devices]);
   const previewImageUrl = appendPreviewFrameParam(previewUrl, previewFrameSeq);
-  const layoutByDeviceId = useMemo(() => new Map(deviceLayouts.map((layout) => [layout.deviceId, layout])), [deviceLayouts]);
-  const devicesById = useMemo(() => new Map(state.devices.map((device) => [device.id, device])), [state.devices]);
+  const boundDeviceIds = useMemo(
+    () => new Set(deviceLayouts.flatMap((layout) => (layout.deviceId ? [layout.deviceId] : []))),
+    [deviceLayouts]
+  );
   const visibleFieldCards = useMemo(
     () =>
       deviceLayouts
-        .map((layout) => ({ layout, device: devicesById.get(layout.deviceId) }))
-        .filter((item): item is { layout: PortalDeviceLayout; device: PortalDevice } =>
-          Boolean(item.device && filteredDevices.some((device) => device.id === item.layout.deviceId))
-        )
+        .map((layout) => ({ layout, device: layout.deviceId ? devicesById.get(layout.deviceId) : undefined }))
+        .filter((item) => {
+          if (item.device) {
+            return filteredDevices.some((device) => device.id === item.device?.id);
+          }
+          const value = search.trim().toLowerCase();
+          return statusFilter === "all" && (!value || [item.layout.id, item.layout.title].some((field) => field.toLowerCase().includes(value)));
+        })
         .sort((a, b) => a.layout.zIndex - b.layout.zIndex),
-    [deviceLayouts, devicesById, filteredDevices]
+    [deviceLayouts, devicesById, filteredDevices, search, statusFilter]
   );
   const unplacedDevices = useMemo(
-    () => state.devices.filter((device) => !layoutByDeviceId.has(device.id)),
-    [layoutByDeviceId, state.devices]
+    () => state.devices.filter((device) => !boundDeviceIds.has(device.id)),
+    [boundDeviceIds, state.devices]
   );
-  const selectedLayout = selectedDevice ? layoutByDeviceId.get(selectedDevice.id) : undefined;
   const rebindableDevices = useMemo(
-    () => state.devices.filter((device) => device.id === selectedDevice?.id || !layoutByDeviceId.has(device.id)),
-    [layoutByDeviceId, selectedDevice?.id, state.devices]
+    () => state.devices.filter((device) => device.id === selectedLayout?.deviceId || !boundDeviceIds.has(device.id)),
+    [boundDeviceIds, selectedLayout?.deviceId, state.devices]
   );
 
   const replaceDeviceLayouts = useCallback((next: PortalDeviceLayout[]) => {
@@ -313,32 +336,32 @@ export function DashboardShell({ initialState, initialToken, initialShareToken, 
     }
   }, [isAdmin, replaceDeviceLayouts, state.devices, token]);
 
-  const updateSingleLayout = useCallback((deviceId: string, updater: (layout: PortalDeviceLayout) => PortalDeviceLayout) => {
+  const updateSingleLayout = useCallback((layoutId: string, updater: (layout: PortalDeviceLayout) => PortalDeviceLayout) => {
     const current = normalizeDeviceLayouts(state.devices, deviceLayoutsRef.current);
-    const next = current.map((layout) => (layout.deviceId === deviceId ? updater(layout) : layout));
+    const next = current.map((layout) => (layout.id === layoutId ? updater(layout) : layout));
     replaceDeviceLayouts(next);
     return next;
   }, [replaceDeviceLayouts, state.devices]);
 
   const rebindSelectedLayout = useCallback((event: ChangeEvent<HTMLSelectElement>) => {
-    const nextDeviceId = event.target.value;
-    if (!isAdmin || !selectedDeviceId || nextDeviceId === selectedDeviceId) return;
+    const nextDeviceId = event.target.value || undefined;
+    if (!isAdmin || !selectedLayout) return;
 
     const current = normalizeDeviceLayouts(state.devices, deviceLayoutsRef.current);
-    const selectedLayout = current.find((layout) => layout.deviceId === selectedDeviceId);
-    const nextDevice = state.devices.find((device) => device.id === nextDeviceId);
-    if (!selectedLayout || !nextDevice || current.some((layout) => layout.deviceId === nextDeviceId)) return;
+    if (nextDeviceId === selectedLayout.deviceId) return;
+    const nextDevice = nextDeviceId ? state.devices.find((device) => device.id === nextDeviceId) : undefined;
+    if (nextDeviceId && (!nextDevice || current.some((layout) => layout.id !== selectedLayout.id && layout.deviceId === nextDeviceId))) return;
 
     const next = current
       .map((layout) =>
-        layout.deviceId === selectedDeviceId
-          ? { ...layout, deviceId: nextDeviceId, title: nextDevice.location || nextDevice.displayName }
+        layout.id === selectedLayout.id
+          ? { ...layout, deviceId: nextDeviceId }
           : layout
       );
     replaceDeviceLayouts(next);
-    setSelectedDeviceId(nextDeviceId);
+    setSelectedPlotId(selectedLayout.id);
     void persistLayouts(next);
-  }, [isAdmin, persistLayouts, replaceDeviceLayouts, selectedDeviceId, state.devices]);
+  }, [isAdmin, persistLayouts, replaceDeviceLayouts, selectedLayout, state.devices]);
 
   const canvasMetrics = useCallback(() => {
     const rect = canvasRef.current?.getBoundingClientRect();
@@ -349,24 +372,24 @@ export function DashboardShell({ initialState, initialToken, initialShareToken, 
   }, []);
 
   const beginLayoutDrag = useCallback(
-    (event: ReactPointerEvent<HTMLElement>, deviceId: string, mode: "move" | "resize") => {
-      setSelectedDeviceId(deviceId);
+    (event: ReactPointerEvent<HTMLElement>, layoutId: string, mode: "move" | "resize") => {
+      setSelectedPlotId(layoutId);
       if (!editLayout || !isAdmin) {
         return;
       }
       event.preventDefault();
       event.stopPropagation();
       const current = normalizeDeviceLayouts(state.devices, deviceLayoutsRef.current);
-      const layout = current.find((item) => item.deviceId === deviceId);
+      const layout = current.find((item) => item.id === layoutId);
       if (!layout) {
         return;
       }
       const maxZ = Math.max(...current.map((item) => item.zIndex), 0);
-      const next = updateSingleLayout(deviceId, (item) => ({ ...item, zIndex: maxZ + 1 }));
-      const activeLayout = next.find((item) => item.deviceId === deviceId) ?? layout;
+      const next = updateSingleLayout(layoutId, (item) => ({ ...item, zIndex: maxZ + 1 }));
+      const activeLayout = next.find((item) => item.id === layoutId) ?? layout;
       const metrics = canvasMetrics();
       setDragState({
-        deviceId,
+        layoutId,
         mode,
         startX: event.clientX,
         startY: event.clientY,
@@ -398,11 +421,11 @@ export function DashboardShell({ initialState, initialToken, initialShareToken, 
       ]
     }));
     setTotalDevices(page.total);
-    if (page.items[0] && !page.items.some((device) => device.id === selectedDeviceId)) {
-      setSelectedDeviceId(page.items[0].id);
+    if (selectedLayout?.deviceId && !page.items.some((device) => device.id === selectedLayout.deviceId)) {
+      setSelectedPlotId("");
     }
     setStatusMessage(shareMode ? "客户链接管理模式：仅可管理此设备" : "已连接后台，设备状态为实时数据");
-  }, [isAdmin, search, selectedDeviceId, shareMode, token]);
+  }, [isAdmin, search, selectedLayout?.deviceId, shareMode, token]);
 
   useEffect(() => {
     deviceLayoutsRef.current = deviceLayouts;
@@ -411,16 +434,6 @@ export function DashboardShell({ initialState, initialToken, initialShareToken, 
   useEffect(() => {
     replaceDeviceLayouts(normalizeDeviceLayouts(state.devices, deviceLayoutsRef.current));
   }, [replaceDeviceLayouts, state.devices]);
-
-  useEffect(() => {
-    if (unplacedDevices.length === 0) {
-      setAddDeviceId("");
-      return;
-    }
-    if (!unplacedDevices.some((device) => device.id === addDeviceId)) {
-      setAddDeviceId(unplacedDevices[0].id);
-    }
-  }, [addDeviceId, unplacedDevices]);
 
   useEffect(() => {
     if (!token || !isAdmin) return;
@@ -434,7 +447,7 @@ export function DashboardShell({ initialState, initialToken, initialShareToken, 
     function applyPointerMove(event: PointerEvent) {
       const dxPct = ((event.clientX - activeDrag.startX) / activeDrag.canvasWidth) * 100;
       const dyPct = ((event.clientY - activeDrag.startY) / activeDrag.canvasHeight) * 100;
-      updateSingleLayout(activeDrag.deviceId, (layout) => {
+      updateSingleLayout(activeDrag.layoutId, (layout) => {
         if (activeDrag.mode === "resize") {
           const widthPct = clampPercent(activeDrag.layout.widthPct + dxPct, 12, 100 - activeDrag.layout.xPct);
           const heightPct = clampPercent(activeDrag.layout.heightPct + dyPct, 12, 100 - activeDrag.layout.yPct);
@@ -614,43 +627,41 @@ export function DashboardShell({ initialState, initialToken, initialShareToken, 
   }
 
   async function moveSelectedLayer(position: "front" | "back") {
-    if (!selectedDevice || !selectedLayout || !isAdmin) return;
+    if (!selectedLayout || !isAdmin) return;
     const current = normalizeDeviceLayouts(state.devices, deviceLayoutsRef.current);
     const zValues = current.map((layout) => layout.zIndex);
     const nextZ = position === "front" ? Math.max(...zValues, 0) + 1 : Math.min(...zValues, 1) - 1;
-    const next = updateSingleLayout(selectedDevice.id, (layout) => ({ ...layout, zIndex: nextZ }));
+    const next = updateSingleLayout(selectedLayout.id, (layout) => ({ ...layout, zIndex: nextZ }));
     await persistLayouts(next);
   }
 
-  async function addDeviceCard() {
-    if (!isAdmin || !addDeviceId) return;
-    const device = state.devices.find((item) => item.id === addDeviceId);
-    if (!device || layoutByDeviceId.has(device.id)) return;
+  async function addPlotCard() {
+    if (!isAdmin) return;
     const current = normalizeDeviceLayouts(state.devices, deviceLayoutsRef.current);
     const nextLayout = {
-      ...defaultDeviceLayout(device, current.length),
+      ...defaultPlotLayout(current.length),
       zIndex: Math.max(...current.map((layout) => layout.zIndex), 0) + 1
     };
     const next = [...current, nextLayout];
     replaceDeviceLayouts(next);
-    setSelectedDeviceId(device.id);
+    setSelectedPlotId(nextLayout.id);
     await persistLayouts(next);
   }
 
   async function deleteSelectedLayout() {
-    if (!isAdmin || !selectedDevice || !selectedLayout) return;
-    if (!window.confirm(`删除 ${selectedDevice.displayName} 的地图卡片？设备本身不会删除。`)) return;
-    const next = normalizeDeviceLayouts(state.devices, deviceLayoutsRef.current).filter(
-      (layout) => layout.deviceId !== selectedDevice.id
-    );
+    if (!isAdmin || !selectedLayout) return;
+    if (!window.confirm(`删除 ${selectedLayout.title} 地块卡片？设备本身不会删除。`)) return;
+    const next = normalizeDeviceLayouts(state.devices, deviceLayoutsRef.current).filter((layout) => layout.id !== selectedLayout.id);
     replaceDeviceLayouts(next);
+    setSelectedPlotId(next[0]?.id ?? "");
     await persistLayouts(next);
   }
 
   async function resetLayouts() {
     if (!isAdmin) return;
-    const next = state.devices.map(defaultDeviceLayout);
+    const next = state.devices.map((device, index) => defaultPlotLayout(index, device));
     replaceDeviceLayouts(next);
+    setSelectedPlotId(next[0]?.id ?? "");
     await persistLayouts(next);
   }
 
@@ -812,26 +823,19 @@ export function DashboardShell({ initialState, initialToken, initialShareToken, 
                   <button type="button" className={`icon-button ${editLayout ? "primary" : ""}`} onClick={() => setEditLayout((value) => !value)}>
                     <Move size={17} />{editLayout ? "完成编辑" : "编辑布局"}
                   </button>
-                  {editLayout && unplacedDevices.length > 0 ? (
-                    <label className="layout-binding-field">
-                      <span>新增卡片</span>
-                      <select aria-label="选择要添加的设备" value={addDeviceId} onChange={(event) => setAddDeviceId(event.target.value)}>
-                        {unplacedDevices.map((device) => (
-                          <option key={device.id} value={device.id}>{device.displayName}</option>
-                        ))}
-                      </select>
-                      <button type="button" className="icon-button" onClick={() => void addDeviceCard()}>
-                        <Plus size={17} />添加卡片
-                      </button>
-                    </label>
+                  {editLayout ? (
+                    <button type="button" className="icon-button" onClick={() => void addPlotCard()}>
+                      <Plus size={17} />新增地块
+                    </button>
                   ) : null}
                   <button type="button" className="icon-button" disabled={!selectedLayout} onClick={() => void moveSelectedLayer("front")}>置顶</button>
                   <button type="button" className="icon-button" disabled={!selectedLayout} onClick={() => void moveSelectedLayer("back")}>置底</button>
                   <button type="button" className="icon-button" onClick={() => void resetLayouts()}>重置布局</button>
-                  {editLayout && selectedDevice && selectedLayout ? (
+                  {editLayout && selectedLayout ? (
                     <label className="layout-binding-field">
                       <span>绑定开发板</span>
-                      <select value={selectedDevice.id} onChange={rebindSelectedLayout}>
+                      <select aria-label="绑定开发板" value={selectedLayout.deviceId ?? ""} onChange={rebindSelectedLayout}>
+                        <option value="">未绑定设备</option>
                         {rebindableDevices.map((device) => (
                           <option key={device.id} value={device.id}>{device.displayName}</option>
                         ))}
@@ -853,11 +857,11 @@ export function DashboardShell({ initialState, initialToken, initialShareToken, 
               <div className="field-map-label bottom-right">南区育苗</div>
               {visibleFieldCards.map(({ device, layout }) => (
                 <div
-                  key={device.id}
+                  key={layout.id}
                   role="button"
                   tabIndex={0}
-                  aria-label={`查看 ${device.id} ${device.displayName}`}
-                  className={`field-card ${device.status} ${device.id === selectedDevice?.id ? "selected" : ""}`}
+                  aria-label={`查看地块 ${layout.title}${device ? ` ${device.id} ${device.displayName}` : " 未绑定设备"}`}
+                  className={`field-card ${device?.status ?? "unbound"} ${layout.id === selectedLayout?.id ? "selected" : ""}`}
                   style={{
                     left: `${layout.xPct}%`,
                     top: `${layout.yPct}%`,
@@ -865,32 +869,43 @@ export function DashboardShell({ initialState, initialToken, initialShareToken, 
                     height: `${layout.heightPct}%`,
                     zIndex: layout.zIndex
                   }}
-                  onClick={() => setSelectedDeviceId(device.id)}
+                  onClick={() => setSelectedPlotId(layout.id)}
                   onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault();
-                      setSelectedDeviceId(device.id);
+                      setSelectedPlotId(layout.id);
                     }
                   }}
-                  onPointerDown={(event) => beginLayoutDrag(event, device.id, "move")}
+                  onPointerDown={(event) => beginLayoutDrag(event, layout.id, "move")}
                 >
                   <div className="field-card-header">
-                    <span className={`status ${device.status}`}>{device.status === "online" ? <Wifi size={14} /> : <WifiOff size={14} />}{statusLabel(device.status)}</span>
+                    {device ? (
+                      <span className={`status ${device.status}`}>{device.status === "online" ? <Wifi size={14} /> : <WifiOff size={14} />}{statusLabel(device.status)}</span>
+                    ) : (
+                      <span className="status unbound"><WifiOff size={14} />未绑定设备</span>
+                    )}
                     {editLayout ? <Move size={15} className="field-card-move" /> : null}
                   </div>
                   <strong>{layout.title}</strong>
-                  <span>{device.displayName}</span>
-                  <small>{device.id}</small>
-                  <div className="field-card-meta">
-                    <span>{irrigationStateLabel(device.irrigationState)}{device.irrigationRemainingSec ? ` ${device.irrigationRemainingSec}秒` : ""}</span>
-                    <span>{device.nextScheduleLabel ?? "无定时"}</span>
-                    <span>{device.status === "online" ? "预览可用" : "预览离线"}</span>
-                  </div>
+                  <span>{device?.displayName ?? "等待绑定开发板"}</span>
+                  <small>{device?.id ?? "无设备"}</small>
+                  {device ? (
+                    <div className="field-card-meta">
+                      <span>{irrigationStateLabel(device.irrigationState)}{device.irrigationRemainingSec ? ` ${device.irrigationRemainingSec}秒` : ""}</span>
+                      <span>{device.nextScheduleLabel ?? "无定时"}</span>
+                      <span>{device.status === "online" ? "预览可用" : "预览离线"}</span>
+                    </div>
+                  ) : (
+                    <div className="field-card-meta">
+                      <span>未绑定设备</span>
+                      <span>无设备控制</span>
+                    </div>
+                  )}
                   {editLayout ? (
                     <span
                       className="resize-handle"
                       aria-hidden="true"
-                      onPointerDown={(event) => beginLayoutDrag(event, device.id, "resize")}
+                      onPointerDown={(event) => beginLayoutDrag(event, layout.id, "resize")}
                     >
                       <Maximize2 size={14} />
                     </span>
@@ -900,8 +915,8 @@ export function DashboardShell({ initialState, initialToken, initialShareToken, 
             </div>
             {isAdmin && unplacedDevices.length > 0 ? (
               <div className="unplaced-strip">
-                <span>未布置设备</span>
-                {unplacedDevices.map((device) => <button key={device.id} type="button" onClick={() => setSelectedDeviceId(device.id)}>{device.displayName}</button>)}
+                <span>未绑定设备</span>
+                {unplacedDevices.map((device) => <button key={device.id} type="button">{device.displayName}</button>)}
               </div>
             ) : null}
             <div className="table-footer">共 {totalDevices} 台设备 · 当前显示 {visibleFieldCards.length} 张地块卡片</div>
@@ -940,27 +955,38 @@ export function DashboardShell({ initialState, initialToken, initialShareToken, 
         ) : null}
       </section>
 
-      {selectedDevice && (activeView === "devices" || activeView === "schedules") ? (
+      {(selectedLayout || selectedDevice) && (activeView === "devices" || activeView === "schedules") ? (
         <aside className="device-drawer" aria-label="设备详情">
           <div className="drawer-heading">
-            <span className={`status ${selectedDevice.status}`}>{statusLabel(selectedDevice.status)}</span>
-            <h2>{selectedDevice.displayName}</h2>
-            <p>{selectedDevice.id} · {selectedDevice.location}</p>
+            {selectedDevice ? (
+              <>
+                <span className={`status ${selectedDevice.status}`}>{statusLabel(selectedDevice.status)}</span>
+                <h2>{selectedDevice.displayName}</h2>
+                <p>{selectedDevice.id} · {selectedDevice.location}</p>
+              </>
+            ) : (
+              <>
+                <span className="status unbound">未绑定设备</span>
+                <h2>{selectedLayout?.title}</h2>
+                <p>{selectedLayout?.id} · 未绑定设备</p>
+              </>
+            )}
           </div>
-          <div className="preview-frame drawer-preview">
-            {previewOpen && previewImageUrl ? <img className="preview-image" src={previewImageUrl} alt={`${selectedDevice.displayName} 实时摄像头画面`} /> : <Camera size={42} />}
-          </div>
-          <button type="button" className="icon-button" disabled={selectedDevice.status !== "online"} onClick={openPreview}>
-            <Camera size={17} />{previewOpen ? "关闭实时预览" : "打开实时预览"}
-          </button>
+          {selectedDevice ? (
+            <>
+              <div className="preview-frame drawer-preview">
+                {previewOpen && previewImageUrl ? <img className="preview-image" src={previewImageUrl} alt={`${selectedDevice.displayName} 实时摄像头画面`} /> : <Camera size={42} />}
+              </div>
+              <button type="button" className="icon-button" disabled={selectedDevice.status !== "online"} onClick={openPreview}>
+                <Camera size={17} />{previewOpen ? "关闭实时预览" : "打开实时预览"}
+              </button>
 
-          <section className="drawer-section">
-            <h3>浇灌控制</h3>
-            <p>当前状态：{irrigationStateLabel(selectedDevice.irrigationState)}</p>
-            <button type="button" className="icon-button primary" onClick={startIrrigation}><Droplets size={17} />下发限时浇灌</button>
-          </section>
+              <section className="drawer-section">
+                <h3>浇灌控制</h3>
+                <p>当前状态：{irrigationStateLabel(selectedDevice.irrigationState)}</p>
+                <button type="button" className="icon-button primary" onClick={startIrrigation}><Droplets size={17} />下发限时浇灌</button>
+              </section>
 
-          <>
               <section className="drawer-section">
                 <h3>一次性浇灌</h3>
                 <label className="full-field"><span>一次预约时间</span><input type="datetime-local" value={oneTimeRunAt} onChange={(event) => setOneTimeRunAt(event.target.value)} /></label>
@@ -973,11 +999,17 @@ export function DashboardShell({ initialState, initialToken, initialShareToken, 
                 <label className="full-field"><span>每日浇灌秒数</span><input type="number" min={1} max={900} value={dailyDuration} onChange={(event) => setDailyDuration(Number(event.target.value))} /></label>
                 <button type="button" className="icon-button primary" onClick={() => void createSchedule("daily")}><CalendarClock size={17} />创建每日定时</button>
               </section>
-          </>
-          {scheduleMessages.map((message, index) => (
-            <p className="action-message" key={`${message}-${index}`}>{message}</p>
-          ))}
-          {actionMessage && scheduleMessages.length === 0 ? <p className="action-message">{actionMessage}</p> : null}
+              {scheduleMessages.map((message, index) => (
+                <p className="action-message" key={`${message}-${index}`}>{message}</p>
+              ))}
+              {actionMessage && scheduleMessages.length === 0 ? <p className="action-message">{actionMessage}</p> : null}
+            </>
+          ) : (
+            <section className="drawer-section">
+              <h3>地块信息</h3>
+              <p>未绑定设备</p>
+            </section>
+          )}
         </aside>
       ) : null}
     </main>

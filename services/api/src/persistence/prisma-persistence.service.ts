@@ -65,6 +65,7 @@ export class PrismaPersistenceService implements OnModuleInit, OnModuleDestroy {
       users,
       customers,
       devices,
+      plotCards,
       deviceLayouts,
       assignments,
       commands,
@@ -76,6 +77,7 @@ export class PrismaPersistenceService implements OnModuleInit, OnModuleDestroy {
       this.prisma.user.findMany(),
       this.prisma.customer.findMany(),
       this.prisma.device.findMany(),
+      ((this.prisma as unknown as { plotCard?: { findMany: () => Promise<unknown[]> } }).plotCard?.findMany() ?? Promise.resolve([])),
       this.prisma.deviceLayout.findMany(),
       this.prisma.deviceAssignment.findMany(),
       this.prisma.irrigationCommand.findMany(),
@@ -131,6 +133,48 @@ export class PrismaPersistenceService implements OnModuleInit, OnModuleDestroy {
           updatedAt: layout.updatedAt
         }
       ])
+    );
+    const loadedPlotCards = plotCards as Array<{
+      id: string;
+      title: string;
+      deviceId: string | null;
+      xPct: number;
+      yPct: number;
+      widthPct: number;
+      heightPct: number;
+      zIndex: number;
+      updatedAt: Date;
+    }>;
+    store.plotCards = new Map(
+      (loadedPlotCards.length > 0
+        ? loadedPlotCards
+        : deviceLayouts.map((layout) => ({
+            id: `plot-${layout.deviceId}`,
+            title: layout.title,
+            deviceId: layout.deviceId,
+            xPct: layout.xPct,
+            yPct: layout.yPct,
+            widthPct: layout.widthPct,
+            heightPct: layout.heightPct,
+            zIndex: layout.zIndex,
+            updatedAt: layout.updatedAt
+          }))
+      )
+        .filter((layout) => !layout.deviceId || store.devices.has(layout.deviceId))
+        .map((layout) => [
+          layout.id,
+          {
+            id: layout.id,
+            title: layout.title,
+            deviceId: layout.deviceId ?? undefined,
+            xPct: layout.xPct,
+            yPct: layout.yPct,
+            widthPct: layout.widthPct,
+            heightPct: layout.heightPct,
+            zIndex: layout.zIndex,
+            updatedAt: layout.updatedAt
+          }
+        ])
     );
     store.assignments = new Map(
       assignments.map((assignment) => [
@@ -288,32 +332,46 @@ export class PrismaPersistenceService implements OnModuleInit, OnModuleDestroy {
         });
       }
 
-      await this.prisma.deviceLayout.deleteMany({
-        where: { deviceId: { notIn: Array.from(store.deviceLayouts.keys()) } }
-      });
-
-      for (const layout of store.deviceLayouts.values()) {
-        await this.prisma.deviceLayout.upsert({
-          where: { deviceId: layout.deviceId },
-          create: {
-            deviceId: layout.deviceId,
-            title: layout.title,
-            xPct: layout.xPct,
-            yPct: layout.yPct,
-            widthPct: layout.widthPct,
-            heightPct: layout.heightPct,
-            zIndex: layout.zIndex
-          },
-          update: {
-            title: layout.title,
-            xPct: layout.xPct,
-            yPct: layout.yPct,
-            widthPct: layout.widthPct,
-            heightPct: layout.heightPct,
-            zIndex: layout.zIndex
-          }
+      const plotCardDelegate = (this.prisma as unknown as {
+        plotCard?: {
+          deleteMany: (args?: unknown) => Promise<unknown>;
+          updateMany: (args: unknown) => Promise<unknown>;
+          upsert: (args: unknown) => Promise<unknown>;
+        };
+      }).plotCard;
+      if (plotCardDelegate) {
+        await plotCardDelegate.deleteMany({
+          where: { id: { notIn: Array.from(store.plotCards.keys()) } }
         });
+        await plotCardDelegate.updateMany({ data: { deviceId: null } });
+
+        for (const layout of store.plotCards.values()) {
+          await plotCardDelegate.upsert({
+            where: { id: layout.id },
+            create: {
+              id: layout.id,
+              title: layout.title,
+              deviceId: layout.deviceId,
+              xPct: layout.xPct,
+              yPct: layout.yPct,
+              widthPct: layout.widthPct,
+              heightPct: layout.heightPct,
+              zIndex: layout.zIndex
+            },
+            update: {
+              title: layout.title,
+              deviceId: layout.deviceId,
+              xPct: layout.xPct,
+              yPct: layout.yPct,
+              widthPct: layout.widthPct,
+              heightPct: layout.heightPct,
+              zIndex: layout.zIndex
+            }
+          });
+        }
       }
+
+      await this.prisma.deviceLayout.deleteMany();
 
       for (const command of store.irrigationCommands.values()) {
         await this.prisma.irrigationCommand.upsert({

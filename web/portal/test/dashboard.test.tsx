@@ -8,25 +8,41 @@ describe("DashboardShell device management", () => {
     vi.restoreAllMocks();
   });
 
+  function plotNorth(overrides: Record<string, unknown> = {}) {
+    return {
+      id: "plot-north",
+      deviceId: "device-north-01",
+      title: "North irregular bed",
+      xPct: 10,
+      yPct: 12,
+      widthPct: 24,
+      heightPct: 20,
+      zIndex: 1,
+      ...overrides
+    };
+  }
+
+  function plotSouth(overrides: Record<string, unknown> = {}) {
+    return {
+      id: "plot-south",
+      deviceId: "device-south-01",
+      title: "South propagation",
+      xPct: 45,
+      yPct: 30,
+      widthPct: 24,
+      heightPct: 20,
+      zIndex: 2,
+      ...overrides
+    };
+  }
+
   it("shows a freeform field map and a right-side device drawer for platform admins", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input);
         if (url.endsWith("/api/admin/device-layouts")) {
-          return Response.json({
-            items: [
-              {
-                deviceId: "device-north-01",
-                title: "North irregular bed",
-                xPct: 10,
-                yPct: 12,
-                widthPct: 24,
-                heightPct: 20,
-                zIndex: 1
-              }
-            ]
-          });
+          return Response.json({ items: [plotNorth()] });
         }
         throw new Error(`Unexpected fetch ${url}`);
       })
@@ -41,7 +57,7 @@ describe("DashboardShell device management", () => {
     expect(screen.queryByRole("table", { name: "设备管理表格" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "生成客户链接" })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /查看 device-north-01/ }));
+    fireEvent.click(screen.getByRole("button", { name: /查看地块 North irregular bed/ }));
     expect(screen.getByRole("complementary", { name: "设备详情" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: adminFixture.devices[0].displayName })).toBeInTheDocument();
   });
@@ -62,31 +78,19 @@ describe("DashboardShell device management", () => {
 
     expect(await screen.findByText("已自动保存")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /查看 device-north-01/ })).not.toBeInTheDocument();
-    expect(screen.getByText("未布置设备")).toBeInTheDocument();
+    expect(screen.getByText("未绑定设备")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: adminFixture.devices[0].displayName })).toBeInTheDocument();
   });
 
-  it("auto-saves a device card layout after editing and dragging it", async () => {
+  it("auto-saves a plot card layout after editing and dragging it", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url.endsWith("/api/admin/device-layouts") && (!init?.method || init.method === "GET")) {
-        return Response.json({
-          items: [
-            {
-              deviceId: "device-north-01",
-              title: "North irregular bed",
-              xPct: 10,
-              yPct: 12,
-              widthPct: 24,
-              heightPct: 20,
-              zIndex: 1
-            }
-          ]
-        });
+        return Response.json({ items: [plotNorth()] });
       }
       if (url.endsWith("/api/admin/device-layouts") && init?.method === "PUT") {
-        const body = JSON.parse(String(init.body)) as { items: Array<{ deviceId: string; xPct: number; yPct: number }> };
-        expect(body.items.some((item) => item.deviceId === "device-north-01" && item.xPct !== 10 && item.yPct !== 12)).toBe(true);
+        const body = JSON.parse(String(init.body)) as { items: Array<{ id: string; xPct: number; yPct: number }> };
+        expect(body.items.some((item) => item.id === "plot-north" && item.xPct !== 10 && item.yPct !== 12)).toBe(true);
         return Response.json(body);
       }
       throw new Error(`Unexpected fetch ${url}`);
@@ -97,7 +101,7 @@ describe("DashboardShell device management", () => {
 
     expect(await screen.findByText("North irregular bed")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "编辑布局" }));
-    const card = screen.getByRole("button", { name: /查看 device-north-01/ });
+    const card = screen.getByRole("button", { name: /查看地块 North irregular bed/ });
 
     fireEvent.pointerDown(card, { clientX: 100, clientY: 100, pointerId: 1 });
     fireEvent.pointerMove(window, { clientX: 220, clientY: 180, pointerId: 1 });
@@ -112,29 +116,22 @@ describe("DashboardShell device management", () => {
     expect(await screen.findByText("已自动保存")).toBeInTheDocument();
   });
 
-  it("rebinds the selected field card to another board while editing the layout", async () => {
+  it("binds an empty field card to an available board while editing the layout", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url.endsWith("/api/admin/device-layouts") && (!init?.method || init.method === "GET")) {
         return Response.json({
           items: [
-            {
-              deviceId: "device-north-01",
-              title: "North irregular bed",
-              xPct: 10,
-              yPct: 12,
-              widthPct: 24,
-              heightPct: 20,
-              zIndex: 1
-            }
+            plotNorth(),
+            plotSouth({ id: "plot-empty", deviceId: undefined, title: "Empty bed", xPct: 40 })
           ]
         });
       }
       if (url.endsWith("/api/admin/device-layouts") && init?.method === "PUT") {
-        const body = JSON.parse(String(init.body)) as { items: Array<{ deviceId: string; xPct: number; yPct: number }> };
+        const body = JSON.parse(String(init.body)) as { items: Array<{ id: string; deviceId?: string; xPct: number }> };
         expect(body.items).toEqual(
           expect.arrayContaining([
-            expect.objectContaining({ deviceId: "device-south-01", xPct: 10, yPct: 12 })
+            expect.objectContaining({ id: "plot-empty", deviceId: "device-south-01", xPct: 40 })
           ])
         );
         return Response.json(body);
@@ -145,7 +142,7 @@ describe("DashboardShell device management", () => {
 
     render(<DashboardShell initialState={adminFixture} initialToken="test-token" autoRefresh={false} />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /查看 device-north-01/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /查看地块 Empty bed/ }));
     fireEvent.click(screen.getByRole("button", { name: "编辑布局" }));
     fireEvent.change(screen.getByLabelText("绑定开发板"), { target: { value: "device-south-01" } });
 
@@ -157,17 +154,19 @@ describe("DashboardShell device management", () => {
     );
   });
 
-  it("adds an unplaced device card and saves the new layout collection", async () => {
+  it("creates an unbound plot card even when every device is already bound", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url.endsWith("/api/admin/device-layouts") && (!init?.method || init.method === "GET")) {
-        return Response.json({ items: [] });
+        return Response.json({ items: [plotNorth(), plotSouth()] });
       }
       if (url.endsWith("/api/admin/device-layouts") && init?.method === "PUT") {
-        const body = JSON.parse(String(init.body)) as { items: Array<{ deviceId: string; title: string }> };
-        expect(body.items).toEqual([
-          expect.objectContaining({ deviceId: "device-south-01", title: adminFixture.devices[1].location })
-        ]);
+        const body = JSON.parse(String(init.body)) as { items: Array<{ id: string; deviceId?: string; title: string }> };
+        expect(body.items).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ title: expect.stringMatching(/^未命名地块/), deviceId: undefined })
+          ])
+        );
         return Response.json(body);
       }
       throw new Error(`Unexpected fetch ${url}`);
@@ -178,10 +177,10 @@ describe("DashboardShell device management", () => {
 
     expect(await screen.findByText("已自动保存")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "编辑布局" }));
-    fireEvent.change(screen.getByLabelText("选择要添加的设备"), { target: { value: "device-south-01" } });
-    fireEvent.click(screen.getByRole("button", { name: "添加卡片" }));
+    fireEvent.click(screen.getByRole("button", { name: "新增地块" }));
 
-    expect(await screen.findByRole("button", { name: /查看 device-south-01/ })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /查看地块 未命名地块/ })).toBeInTheDocument();
+    expect(screen.getAllByText("未绑定设备").length).toBeGreaterThan(0);
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(
         "/api/admin/device-layouts",
@@ -190,27 +189,39 @@ describe("DashboardShell device management", () => {
     );
   });
 
-  it("deletes the selected device card without deleting the bound device", async () => {
+  it("hides device controls for an unbound selected plot card", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.endsWith("/api/admin/device-layouts")) {
+          return Response.json({ items: [plotNorth({ id: "plot-empty", deviceId: undefined, title: "Empty bed" })] });
+        }
+        throw new Error(`Unexpected fetch ${url}`);
+      })
+    );
+
+    render(<DashboardShell initialState={adminFixture} initialToken="test-token" autoRefresh={false} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /查看地块 Empty bed/ }));
+
+    expect(screen.getByRole("complementary", { name: "设备详情" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Empty bed" })).toBeInTheDocument();
+    expect(screen.getAllByText("未绑定设备").length).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: "打开实时预览" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "下发限时浇灌" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "创建一次预约" })).not.toBeInTheDocument();
+  });
+
+  it("deletes the selected plot card and releases its device for another plot", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url.endsWith("/api/admin/device-layouts") && (!init?.method || init.method === "GET")) {
-        return Response.json({
-          items: [
-            {
-              deviceId: "device-north-01",
-              title: "North irregular bed",
-              xPct: 10,
-              yPct: 12,
-              widthPct: 24,
-              heightPct: 20,
-              zIndex: 1
-            }
-          ]
-        });
+        return Response.json({ items: [plotNorth(), plotSouth({ id: "plot-empty", deviceId: undefined, title: "Empty bed" })] });
       }
       if (url.endsWith("/api/admin/device-layouts") && init?.method === "PUT") {
-        const body = JSON.parse(String(init.body)) as { items: Array<{ deviceId: string }> };
-        expect(body.items.some((item) => item.deviceId === "device-north-01")).toBe(false);
+        const body = JSON.parse(String(init.body)) as { items: Array<{ id: string; deviceId?: string }> };
+        expect(body.items.some((item) => item.id === "plot-north")).toBe(false);
         return Response.json(body);
       }
       throw new Error(`Unexpected fetch ${url}`);
@@ -220,16 +231,16 @@ describe("DashboardShell device management", () => {
 
     render(<DashboardShell initialState={adminFixture} initialToken="test-token" autoRefresh={false} />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /查看 device-north-01/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /查看地块 North irregular bed/ }));
     fireEvent.click(screen.getByRole("button", { name: "编辑布局" }));
     fireEvent.click(screen.getByRole("button", { name: "删除卡片" }));
 
-    await waitFor(() => expect(screen.queryByRole("button", { name: /查看 device-north-01/ })).not.toBeInTheDocument());
-    expect(screen.getByRole("heading", { name: adminFixture.devices[0].displayName })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: adminFixture.devices[0].displayName })).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("button", { name: /查看地块 North irregular bed/ })).not.toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /查看地块 Empty bed/ }));
+    expect(screen.getByRole("option", { name: adminFixture.devices[0].displayName })).toBeInTheDocument();
   });
 
-  it("does not offer already placed devices when rebinding a selected card", async () => {
+  it("does not offer already bound devices when binding another plot", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
@@ -237,24 +248,9 @@ describe("DashboardShell device management", () => {
         if (url.endsWith("/api/admin/device-layouts")) {
           return Response.json({
             items: [
-              {
-                deviceId: "device-north-01",
-                title: "North irregular bed",
-                xPct: 10,
-                yPct: 12,
-                widthPct: 24,
-                heightPct: 20,
-                zIndex: 1
-              },
-              {
-                deviceId: "device-south-01",
-                title: "South propagation",
-                xPct: 45,
-                yPct: 30,
-                widthPct: 24,
-                heightPct: 20,
-                zIndex: 2
-              }
+              plotNorth(),
+              plotSouth(),
+              plotSouth({ id: "plot-empty", deviceId: undefined, title: "Empty bed", zIndex: 3 })
             ]
           });
         }
@@ -264,12 +260,13 @@ describe("DashboardShell device management", () => {
 
     render(<DashboardShell initialState={adminFixture} initialToken="test-token" autoRefresh={false} />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /查看 device-north-01/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /查看地块 Empty bed/ }));
     fireEvent.click(screen.getByRole("button", { name: "编辑布局" }));
 
     const bindingSelect = screen.getByLabelText("绑定开发板");
-    expect(bindingSelect).toHaveDisplayValue(adminFixture.devices[0].displayName);
+    expect(bindingSelect).toHaveDisplayValue("未绑定设备");
     expect(screen.queryByRole("option", { name: adminFixture.devices[1].displayName })).not.toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: adminFixture.devices[0].displayName })).not.toBeInTheDocument();
   });
 
   it("creates one-time and daily irrigation schedules from the detail drawer", async () => {
