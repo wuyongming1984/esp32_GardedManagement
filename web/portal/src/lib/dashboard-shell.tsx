@@ -859,17 +859,6 @@ export function DashboardShell({ initialState, initialToken, initialShareToken, 
                   <button type="button" className="icon-button" disabled={!selectedLayout} onClick={() => void moveSelectedLayer("back")}>置底</button>
                   <button type="button" className="icon-button" onClick={() => void resetLayouts()}>重置布局</button>
                   {editLayout && selectedLayout ? (
-                    <label className="layout-binding-field">
-                      <span>绑定开发板</span>
-                      <select aria-label="绑定开发板" value={selectedLayout.deviceId ?? ""} onChange={rebindSelectedLayout}>
-                        <option value="">未绑定设备</option>
-                        {rebindableDevices.map((device) => (
-                          <option key={device.id} value={device.id}>{device.displayName}</option>
-                        ))}
-                      </select>
-                    </label>
-                  ) : null}
-                  {editLayout && selectedLayout ? (
                     <button type="button" className="icon-button danger" onClick={() => void deleteSelectedLayout()}>
                       <Trash2 size={17} />删除卡片
                     </button>
@@ -1009,6 +998,15 @@ export function DashboardShell({ initialState, initialToken, initialShareToken, 
               <label className="full-field">
                 <span>地块说明</span>
                 <input value={selectedLayout.subtitle ?? ""} onChange={(event) => updateSelectedLayoutText("subtitle", event.target.value)} />
+              </label>
+              <label className="full-field">
+                <span>绑定设备</span>
+                <select aria-label="绑定设备" value={selectedLayout.deviceId ?? ""} onChange={rebindSelectedLayout}>
+                  <option value="">未绑定设备</option>
+                  {rebindableDevices.map((device) => (
+                    <option key={device.id} value={device.id}>{device.displayName}</option>
+                  ))}
+                </select>
               </label>
             </section>
           ) : null}

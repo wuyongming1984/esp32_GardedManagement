@@ -144,7 +144,7 @@ describe("DashboardShell device management", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: /查看地块 Empty bed/ }));
     fireEvent.click(screen.getByRole("button", { name: "编辑布局" }));
-    fireEvent.change(screen.getByLabelText("绑定开发板"), { target: { value: "device-south-01" } });
+    fireEvent.change(screen.getByLabelText("绑定设备"), { target: { value: "device-south-01" } });
 
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(
@@ -251,6 +251,39 @@ describe("DashboardShell device management", () => {
     );
   });
 
+  it("binds a selected plot card from the detail panel", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/api/admin/device-layouts") && (!init?.method || init.method === "GET")) {
+        return Response.json({
+          items: [plotNorth(), plotSouth({ id: "plot-empty", deviceId: undefined, title: "Empty bed" })]
+        });
+      }
+      if (url.endsWith("/api/admin/device-layouts") && init?.method === "PUT") {
+        const body = JSON.parse(String(init.body)) as { items: Array<{ id: string; deviceId?: string }> };
+        expect(body.items).toEqual(
+          expect.arrayContaining([expect.objectContaining({ id: "plot-empty", deviceId: "device-south-01" })])
+        );
+        return Response.json(body);
+      }
+      throw new Error(`Unexpected fetch ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<DashboardShell initialState={adminFixture} initialToken="test-token" autoRefresh={false} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /查看地块 Empty bed/ }));
+    fireEvent.click(screen.getByRole("button", { name: "编辑布局" }));
+    fireEvent.change(screen.getByLabelText("绑定设备"), { target: { value: "device-south-01" } });
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/admin/device-layouts",
+        expect.objectContaining({ method: "PUT" })
+      )
+    );
+  });
+
   it("deletes the selected plot card and releases its device for another plot", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
@@ -301,7 +334,7 @@ describe("DashboardShell device management", () => {
     fireEvent.click(await screen.findByRole("button", { name: /查看地块 Empty bed/ }));
     fireEvent.click(screen.getByRole("button", { name: "编辑布局" }));
 
-    const bindingSelect = screen.getByLabelText("绑定开发板");
+    const bindingSelect = screen.getByLabelText("绑定设备");
     expect(bindingSelect).toHaveDisplayValue("未绑定设备");
     expect(screen.queryByRole("option", { name: adminFixture.devices[1].displayName })).not.toBeInTheDocument();
     expect(screen.queryByRole("option", { name: adminFixture.devices[0].displayName })).not.toBeInTheDocument();
