@@ -1,4 +1,4 @@
-import { ForbiddenException, ServiceUnavailableException, UnauthorizedException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, ServiceUnavailableException, UnauthorizedException } from "@nestjs/common";
 import jwt from "jsonwebtoken";
 import { describe, expect, it } from "vitest";
 import { AdminController } from "../src/admin/admin.controller.js";
@@ -150,6 +150,74 @@ describe("admin share links and device paging", () => {
     expect(controller.deviceLayouts(adminAuth).items).toEqual(
       expect.arrayContaining([expect.objectContaining({ deviceId: "device-north-01", xPct: 13.5, zIndex: 7 })])
     );
+  });
+
+  it("replaces the saved device card layout collection and removes omitted cards", () => {
+    const controller = new AdminController();
+
+    controller.saveDeviceLayouts(
+      {
+        items: [
+          {
+            deviceId: "device-north-01",
+            title: "North card",
+            xPct: 10,
+            yPct: 12,
+            widthPct: 24,
+            heightPct: 20,
+            zIndex: 1
+          },
+          {
+            deviceId: "device-south-01",
+            title: "South card",
+            xPct: 40,
+            yPct: 12,
+            widthPct: 24,
+            heightPct: 20,
+            zIndex: 2
+          }
+        ]
+      },
+      adminAuth
+    );
+
+    const saved = controller.saveDeviceLayouts(
+      {
+        items: [
+          {
+            deviceId: "device-north-01",
+            title: "North card retained",
+            xPct: 14,
+            yPct: 16,
+            widthPct: 24,
+            heightPct: 20,
+            zIndex: 3
+          }
+        ]
+      },
+      adminAuth
+    );
+
+    expect(saved.items).toHaveLength(1);
+    expect(controller.deviceLayouts(adminAuth).items).toEqual([
+      expect.objectContaining({ deviceId: "device-north-01", title: "North card retained" })
+    ]);
+  });
+
+  it("rejects duplicate device bindings in one layout save request", () => {
+    const controller = new AdminController();
+
+    expect(() =>
+      controller.saveDeviceLayouts(
+        {
+          items: [
+            { deviceId: "device-north-01", title: "A", xPct: 10, yPct: 10, widthPct: 24, heightPct: 20, zIndex: 1 },
+            { deviceId: "device-north-01", title: "B", xPct: 30, yPct: 10, widthPct: 24, heightPct: 20, zIndex: 2 }
+          ]
+        },
+        adminAuth
+      )
+    ).toThrow(BadRequestException);
   });
 });
 

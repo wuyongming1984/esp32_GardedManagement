@@ -319,6 +319,15 @@ p {
   background: var(--accent-strong);
 }
 
+.icon-button.danger {
+  color: var(--danger);
+  border-color: rgba(163, 59, 59, 0.28);
+}
+
+.icon-button.danger:hover {
+  background: rgba(163, 59, 59, 0.08);
+}
+
 .icon-button:disabled {
   opacity: 0.45;
   cursor: not-allowed;
@@ -393,6 +402,7 @@ button.filter-chip {
 .layout-binding-field {
   display: inline-flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   min-height: 34px;
   color: var(--muted);

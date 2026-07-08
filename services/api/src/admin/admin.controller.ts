@@ -30,20 +30,6 @@ function clampNumber(value: unknown, min: number, max: number, fallback: number)
   return Math.min(max, Math.max(min, parsed));
 }
 
-function defaultLayoutForDevice(device: Device, index: number): DeviceLayout {
-  const column = index % 3;
-  const row = Math.floor(index / 3);
-  return {
-    deviceId: device.id,
-    title: device.location || device.displayName,
-    xPct: 6 + column * 30,
-    yPct: 10 + row * 28,
-    widthPct: 24,
-    heightPct: 20,
-    zIndex: index + 1
-  };
-}
-
 function sanitizeLayout(input: Partial<DeviceLayout>, index: number): DeviceLayout {
   if (!input.deviceId || !appState.store.devices.has(input.deviceId)) {
     throw new BadRequestException("Device layout deviceId is invalid");
@@ -62,10 +48,7 @@ function sanitizeLayout(input: Partial<DeviceLayout>, index: number): DeviceLayo
 }
 
 function listDeviceLayouts() {
-  return Array.from(appState.store.devices.values()).map((device, index) => {
-    const layout = appState.store.deviceLayouts.get(device.id);
-    return layout ?? defaultLayoutForDevice(device, index);
-  });
+  return Array.from(appState.store.deviceLayouts.values()).sort((a, b) => a.zIndex - b.zIndex);
 }
 
 @Controller("admin")
@@ -203,8 +186,17 @@ export class AdminController {
   ) {
     requireAdmin(authorization);
     const items = body.items ?? [];
+    const seenDeviceIds = new Set<string>();
+    for (const item of items) {
+      if (item.deviceId && seenDeviceIds.has(item.deviceId)) {
+        throw new BadRequestException("Device layout deviceId must be unique");
+      }
+      if (item.deviceId) {
+        seenDeviceIds.add(item.deviceId);
+      }
+    }
     const saved = items.map((item, index) => sanitizeLayout(item, index));
-    saved.forEach((layout) => appState.store.deviceLayouts.set(layout.deviceId, layout));
+    appState.store.deviceLayouts = new Map(saved.map((layout) => [layout.deviceId, layout]));
     return { items: saved };
   }
 

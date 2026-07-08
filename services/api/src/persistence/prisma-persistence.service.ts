@@ -288,6 +288,10 @@ export class PrismaPersistenceService implements OnModuleInit, OnModuleDestroy {
         });
       }
 
+      await this.prisma.deviceLayout.deleteMany({
+        where: { deviceId: { notIn: Array.from(store.deviceLayouts.keys()) } }
+      });
+
       for (const layout of store.deviceLayouts.values()) {
         await this.prisma.deviceLayout.upsert({
           where: { deviceId: layout.deviceId },
